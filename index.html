@@ -538,7 +538,7 @@
   const DEST_ITEMS = ["", ...new Set(TIMETABLE.map(t => t.dest)), "SERVICE ENDED"];
   const ROWS = 5, DEST_LEN = 16, STEP = 50;
 
-  let audio = null, soundOn = false, lastClick = 0, noiseBuf = null;
+  let audio = null, soundOn = true, lastClick = 0, noiseBuf = null;
   // 音量（種類ごと）。0〜150%、前回の設定を覚えておく
   const SOUNDS = ["master", "music", "flaps", "crowd", "steps", "train", "brakes", "doors", "whistle"];
   const VOL_DEFAULT = {master:.8, music:.55, flaps:.7, crowd:.7, steps:.7, train:.8, brakes:.6, doors:.7, whistle:.7};
