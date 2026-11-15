@@ -1,0 +1,2160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Departures — London Victoria, 1965</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Noto+Sans+JP:wght@500;700&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#f3ecdc;
+    --ink-dim:#a9a191;
+    --amber:#ffb547;     /* 悪い知らせ：遅れ */
+    --red:#ff6a4d;       /* 悪い知らせ：運休 */
+    --green:#9fdc8a;     /* 良い知らせ：乗れる */
+    --gold:#ecc66f;      /* 看板列車 */
+    --brass-hi:#f2d79a; --brass:#c59a52; --brass-lo:#6e4f22;
+    /* 列の幅（行の em 単位）。字体が細いのでタイルも細くした */
+    --c-time:3.1em; --c-plat:1.6em; --c-rem:7.4em;
+    --g1:.6em; --g2:.95em;
+    --tile-h:1.5em;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#0b0907;overflow:hidden}
+  body{font-family:"Barlow Condensed","Arial Narrow",sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased}
+  .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  #room,#win,#anim,#crowd,#front{position:fixed;inset:0;width:100%;height:100%;display:block;pointer-events:none}
+  #anim,#crowd{image-rendering:auto}   /* 半分の解像度で描いて拡大＝焦点の外のぼけ */
+
+  .scene{position:fixed;inset:0;z-index:0;pointer-events:none}   /* 絵だけなので、押す操作は受けない（操作プレートの上にかぶらないように） */
+  .world{position:absolute;transform-style:preserve-3d;transform-origin:0 50%}
+
+  /* ===== 盤（筐体）：厚い鋼板の箱。光は照明の位置から計算したものだけを重ねる ===== */
+  .board{
+    position:relative;transform-style:preserve-3d;
+    padding:.5em 1.1em .85em 1.2em;
+    border:.5em solid #18191b;border-radius:.12em;
+    background:#0b0c0d;
+    box-shadow:
+      inset 0 0 0 .05em #050505,
+      inset 0 0 0 .1em #5e4721,
+      inset 0 0 0 .13em #1a1408,
+      inset 0 .3em 1.4em rgba(0,0,0,.8),
+      0 0 0 .04em #2c2d2f;
+  }
+  .board::before{ /* 鋼板の縁：塗装の摩耗と、面取りのわずかな明暗 */
+    content:"";position:absolute;inset:-.5em;border-radius:.12em;pointer-events:none;
+    background:
+      linear-gradient(180deg,rgba(255,240,210,.10),rgba(255,240,210,0) .6em),
+      linear-gradient(0deg,rgba(0,0,0,.35),rgba(0,0,0,0) .6em);
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor;mask-composite:exclude;padding:.5em;
+  }
+  .underside{ /* 見上げると見える筐体の底面（壁まで 1em） */
+    position:absolute;left:-.5em;right:-.5em;top:calc(100% + .5em);height:1em;
+    transform-origin:50% 0;transform:rotateX(-90deg);
+    background:linear-gradient(180deg,#232426,#0e0f10 30%,#08090a);
+  }
+  .screw{position:absolute;width:.24em;height:.24em;border-radius:50%;z-index:6;
+    background:radial-gradient(circle at 38% 35%,#8d8a84,#3b3936 55%,#141312);box-shadow:0 .02em .03em rgba(0,0,0,.8)}
+  .screw::after{content:"";position:absolute;left:12%;right:12%;top:46%;height:9%;background:#0d0c0b;transform:rotate(35deg)}
+  .glass{ /* 前面ガラス：映り込みと、下に溜まった埃 */
+    position:absolute;inset:0;pointer-events:none;z-index:4;border-radius:.05em;
+    background:
+      linear-gradient(104deg,rgba(255,255,255,0) 14%,rgba(255,250,235,.05) 21%,rgba(255,255,255,0) 30%,rgba(255,255,255,0) 66%,rgba(255,250,235,.03) 71%,rgba(255,255,255,0) 77%),
+      linear-gradient(0deg,rgba(70,58,42,.20),rgba(70,58,42,0) 16%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .55  0 0 0 0 .5  0 0 0 0 .42  0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size:auto,auto,8em 8em;
+  }
+  .maker{position:absolute;left:50%;bottom:-.43em;transform:translateX(-50%);z-index:6;
+    font-size:.26em;font-weight:700;letter-spacing:.14em;color:#2b1f0c;white-space:nowrap;
+    padding:.18em .9em;border-radius:.2em;background:linear-gradient(180deg,#b9944f,#8a6a35);
+    box-shadow:inset 0 .06em 0 rgba(255,235,190,.45),0 .06em .1em rgba(0,0,0,.7)}
+
+  /* 見出し（盤に描かれた文字）：左に題字、右端に時計 */
+  .head{display:flex;align-items:center;gap:.7em;height:2.75em}
+  .title{font-weight:700;font-size:1.4em;letter-spacing:.05em;color:#ece2c9;text-shadow:0 .03em 0 rgba(0,0,0,.8)}
+  .sub{font-size:.5em;font-weight:600;letter-spacing:.12em;color:#9b8f77;padding-top:.5em}
+  .clockbox{ /* 駅の時計には専用の枠 */
+    margin-left:auto;display:flex;align-items:center;padding:.16em .22em;border-radius:.1em;background:#040405;
+    box-shadow:inset 0 .05em .14em #000,0 0 0 .06em #3c2c12,0 0 0 .12em #9b7a3f,0 0 0 .15em #2a1f0d,0 .1em .2em rgba(0,0,0,.6)}
+  .cols,.row{display:grid;align-items:center;
+    grid-template-columns:var(--c-time) var(--g1) minmax(0,1fr) var(--g2) var(--c-plat) var(--g2) var(--c-rem)}
+  .cols{height:1.2em}
+  .cols span{font-size:.56em;font-weight:600;letter-spacing:.12em;color:#c9b894;padding-left:.1em;white-space:nowrap}
+  .cols span:nth-child(1){grid-column:1} .cols span:nth-child(2){grid-column:3}
+  .cols span:nth-child(3){grid-column:5} .cols span:nth-child(4){grid-column:7}
+
+  .row{position:relative;grid-template-rows:1.74em 1.3em;padding-bottom:.14em}
+  .row + .row{margin-top:.14em}
+  .row::before{
+    content:"";position:absolute;left:-.5em;right:-.5em;top:.06em;bottom:0;border-radius:.1em;
+    background:linear-gradient(180deg,#050506,#0a0a0c 40%,#0c0c0e);
+    box-shadow:inset 0 .06em .12em rgba(0,0,0,.9),0 .03em 0 rgba(255,255,255,.035);
+  }
+  .row::after{ /* 看板列車の行に付く真鍮の差し札 */
+    content:"";position:absolute;left:-.5em;top:.06em;bottom:0;width:.14em;border-radius:.1em 0 0 .1em;
+    background:linear-gradient(180deg,var(--brass-hi),var(--brass) 50%,var(--brass-lo));
+    opacity:0;transition:opacity .4s;
+  }
+  .row.named::after{opacity:1}
+  .c-time,.c-dest,.c-plat,.c-rem{grid-row:1}
+  .c-time{grid-column:1} .c-dest{grid-column:3} .c-plat{grid-column:5} .c-rem{grid-column:7}
+  .c-call{grid-row:2;grid-column:3 / -1;height:1.2em;align-self:start}
+  .flaps{display:flex;gap:.06em;position:relative}
+
+  /* ===== フラップ1枚 ===== */
+  .tile{
+    position:relative;flex:none;height:var(--tile-h);width:.72em;
+    perspective:4em;border-radius:.07em;
+    box-shadow:0 .05em .08em rgba(0,0,0,.85);
+  }
+  .tile.d{width:.62em}             /* 時刻の数字 */
+  .tile.colon{width:.28em}
+  .tile.rem{width:var(--c-rem)}
+  .tile.slat{width:100%;height:100%;perspective:10em;border-radius:.05em}
+  .tile.clock{width:.86em;height:2.05em}
+  .tile.clock.colon{width:.3em}
+  .h,.f{position:absolute;left:0;right:0;height:50%;overflow:hidden;backface-visibility:hidden}
+  .h.t,.f.t{top:0;border-radius:.07em .07em 0 0;transform-origin:50% 100%}
+  .h.b,.f.b{bottom:0;border-radius:0 0 .07em .07em;transform-origin:50% 0}
+  .t{background:linear-gradient(180deg,#1f2023,#17181a 90%,#0e0e10)}
+  .b{background:linear-gradient(180deg,#0b0b0c,#141416 12%,#19191c)}
+  .f{visibility:hidden;z-index:2}
+  .h span,.f span{
+    position:absolute;left:0;right:0;height:200%;
+    display:flex;align-items:center;justify-content:center;white-space:nowrap;
+    font-weight:600;color:var(--ink);line-height:1;
+  }
+  .t span{top:0} .b span{top:-100%}
+  .tile span{font-size:1.16em}
+  .tile.d span{font-size:1em;font-weight:500}
+  .tile.colon span{font-size:1em}
+  .tile.clock span{font-size:1.5em;font-weight:500}
+  .tile.rem span{font-size:.76em;letter-spacing:.06em;justify-content:flex-start;padding-left:.45em;color:#d6cdb9}
+  .tile span.amber{color:var(--amber)}
+  .tile span.red{color:var(--red)}
+  /* 日本語：行先は1枚の幕に駅名（当時の日本の反転フラップと同じ）。
+     字体は戦後のモダンな角ゴシックに近い Zen Kaku Gothic New を、英字の Barlow Condensed に合わせて少し縦長に */
+  .board.ja{--jp:"Zen Kaku Gothic New","Noto Sans JP",sans-serif}
+  .board.ja .title{font-family:var(--jp);font-weight:900;font-size:1.32em;letter-spacing:.04em;display:inline-block;transform:scaleX(.88);transform-origin:left center;margin-right:-.6em}
+  .board.ja .sub,.board.ja .cols span,.board.ja .maker{font-family:var(--jp);font-weight:700;letter-spacing:.04em}
+  .board.ja .cols span{font-size:.54em}
+  .tile.jdest{width:12.6em}
+  .tile.jdest span{font-family:var(--jp);font-size:.98em;font-weight:900;justify-content:flex-start;padding-left:.45em;letter-spacing:.02em;transform:scaleX(.86);transform-origin:left center}
+  .board.ja .tile.rem span{font-family:var(--jp);font-size:.74em;letter-spacing:.02em;font-weight:900;transform:scaleX(.88);transform-origin:left center}
+  .board.ja .tile.slat span{font-family:var(--jp);font-size:.7em;line-height:1.72em;letter-spacing:.02em;font-weight:700}
+  .board.ja .tile.slat span b{letter-spacing:.04em}
+  .sheet{font-family:"Barlow Condensed","Noto Sans JP","Arial Narrow",sans-serif}
+  /* 日付：曜日・日・月の幕 */
+  #date{margin-right:.32em;padding-right:.32em;box-shadow:.05em 0 0 #3c2c12}
+  #date{gap:.14em}
+  .tile.word{height:2.05em;width:2.15em}
+  .tile.word span{font-size:1.02em;font-weight:600;letter-spacing:.06em}
+  .tile.word.day{width:1.4em}
+  .board.ja .tile.word span{font-family:var(--jp);font-weight:900;font-size:.9em;letter-spacing:0}
+  .board.ja .tile.word.day{width:1.75em}
+  .board.ja .tile.word.mon{width:1.85em}
+  .board.ja .tile.word.wd{width:1.5em}
+  .tile.rem span.go{color:#fffaf0;font-weight:700}
+  /* 空のフラップは盤の地に溶け込ませる */
+  .tile.blank{box-shadow:none}
+  .tile.blank .h.t{background:#101012} .tile.blank .h.b{background:#0d0d0f}
+  .tile.blank::after{opacity:.35} .tile.blank::before{opacity:.15}
+  .tile span.dim{color:var(--ink-dim)}
+  /* 停車駅の札（1枚板が丸ごと返る） */
+  .tile.slat span{
+    display:block;font-size:.76em;line-height:1.46em;height:200%;padding:0 .45em;
+    letter-spacing:.06em;font-weight:600;color:#b9b09e;overflow:hidden;
+  }
+  .tile.slat span .fit{display:inline-block;width:max-content;transform-origin:0 50%;white-space:nowrap}
+  .tile.slat .b span{top:-100%}
+  .tile.slat span b{color:var(--gold);font-weight:700;letter-spacing:.1em;font-size:1.22em;margin-right:.6em;vertical-align:-.03em}
+  .tile.slat span i{font-style:normal;color:#d2c7b0;font-weight:600;letter-spacing:.08em;margin-right:.45em}
+  .tile.slat span.msg{color:#d2c7b0}
+
+  .tile::after{ /* 割れ目 */
+    content:"";position:absolute;left:0;right:0;top:50%;height:.045em;margin-top:-.022em;z-index:3;
+    background:#000;box-shadow:0 .02em 0 rgba(255,255,255,.05);
+  }
+  .tile::before{ /* 軸 */
+    content:"";position:absolute;left:-.03em;right:-.03em;top:50%;height:.12em;margin-top:-.06em;z-index:1;
+    background:linear-gradient(90deg,#3a3a3a,#111 .12em,transparent .12em,transparent calc(100% - .12em),#111 calc(100% - .12em),#3a3a3a);
+  }
+  .tile.slat::before{height:.08em;margin-top:-.04em}
+
+  .light{position:absolute;left:-.5em;top:-.5em;border-radius:.12em;pointer-events:none;z-index:5;width:calc(100% + 1em);height:calc(100% + 1em)}
+  #glow{opacity:.7}
+
+  /* 画面全体に同じ粒子をかけて、盤と駅を1枚の絵としてなじませる */
+  .grain{position:fixed;inset:0;pointer-events:none;z-index:7;opacity:.5;mix-blend-mode:overlay;
+    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5  0 0 0 0 .48  0 0 0 0 .44  0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+  .vignette{
+    position:fixed;inset:0;pointer-events:none;z-index:6;
+    background:radial-gradient(ellipse 95% 90% at 45% 42%, transparent 58%, rgba(0,0,0,.42));
+  }
+
+  /* ===== 操作プレート：暗い鉄板に真鍮の文字。小さく、画面の主役にならないように ===== */
+  .plate{
+    position:fixed;right:14px;bottom:12px;z-index:15;max-width:calc(100vw - 24px);
+    display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:6px;padding:5px 7px;border-radius:5px;
+    background:rgba(20,19,17,.72);backdrop-filter:blur(3px);
+    box-shadow:0 0 0 1px rgba(160,124,62,.35),0 4px 14px rgba(0,0,0,.4);
+    font:600 11px/1 "Barlow Condensed","Arial Narrow",sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#c9a96a;
+    opacity:.55;transition:opacity .3s;
+  }
+  .plate:hover,.plate:focus-within,.plate.active{opacity:1}
+  .grp{display:flex;gap:3px;align-items:center}
+  .grp + .grp{padding-left:6px;border-left:1px solid rgba(160,124,62,.25)}
+  .grp[hidden]{display:none}
+  .plate button,.menu button{
+    font:inherit;letter-spacing:inherit;text-transform:inherit;color:#c9a96a;
+    background:transparent;border:1px solid rgba(160,124,62,.3);border-radius:3px;padding:5px 8px;cursor:pointer;
+    display:flex;align-items:center;gap:5px;
+  }
+  .plate button:hover,.menu button:hover{background:rgba(201,169,106,.1)}
+  .plate button[aria-pressed="true"],.menu button[aria-pressed="true"]{background:rgba(201,169,106,.18);color:#f0d9a2;border-color:rgba(201,169,106,.6)}
+  .plate button:focus-visible,.menu button:focus-visible{outline:2px solid #f0d9a2;outline-offset:1px}
+  #menuBtn{font-size:13px;padding:4px 8px}
+  .lamp{width:6px;height:6px;border-radius:50%;background:#4a3a20}
+  [aria-pressed="true"] .lamp{background:#ffcf6e;box-shadow:0 0 5px 1px rgba(255,190,90,.8)}
+  .menu{
+    position:fixed;right:14px;bottom:calc(var(--plate-h, 40px) + 12px);z-index:14;display:flex;flex-direction:column;gap:4px;padding:8px;border-radius:5px;
+    background:rgba(20,19,17,.92);box-shadow:0 0 0 1px rgba(160,124,62,.35),0 8px 24px rgba(0,0,0,.5);
+    font:600 12px/1 "Barlow Condensed","Noto Sans JP","Arial Narrow",sans-serif;letter-spacing:.12em;text-transform:uppercase;
+    opacity:0;transform:translateY(6px);pointer-events:none;transition:opacity .15s,transform .15s;min-width:150px;
+  }
+  .menu.open{opacity:1;transform:none;pointer-events:auto}
+  .menu .mrow{display:flex;gap:4px;margin-bottom:4px}
+  .menu .mrow button{flex:1;justify-content:center}
+
+  /* ===== 印刷された時刻表（定刻だけが載っている） ===== */
+  .mixer{
+    position:fixed;right:14px;bottom:calc(var(--plate-h, 40px) + 12px);z-index:12;width:min(340px, calc(100vw - 28px));
+    background:#efe5cf;color:#1d1a15;border-radius:2px;box-shadow:0 18px 40px rgba(0,0,0,.6),0 0 0 1px rgba(0,0,0,.2);
+    font:500 14px/1.25 "Barlow Condensed","Noto Sans JP","Arial Narrow",sans-serif;
+    opacity:0;transform:translateY(10px);pointer-events:none;transition:opacity .2s,transform .2s;
+  }
+  .mixer.open{opacity:1;transform:none;pointer-events:auto}
+  .mixer header{padding:12px 16px 8px;border-bottom:2px solid #1d1a15}
+  .mixer h2{font-size:18px;font-weight:700;letter-spacing:.06em}
+  .mixer p{font-size:12px;color:#5d5547;margin-top:2px}
+  .mixer p.np{color:#7a2f1d;font-weight:700;margin-top:6px}
+  .mixer p.np:empty{display:none}
+  #volRows{padding:6px 16px 12px}
+  .vrow{display:grid;grid-template-columns:1fr 42px;gap:2px 10px;align-items:center;padding:5px 0;border-bottom:1px solid rgba(29,26,21,.12)}
+  .vrow:first-child{border-bottom:2px solid rgba(29,26,21,.35);padding-bottom:8px}
+  .vrow label{font-size:13px;letter-spacing:.03em}
+  .vrow output{grid-row:1 / 3;grid-column:2;text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+  .vrow input{width:100%;accent-color:#8a6a35;margin:0}
+  .plansheet{
+    position:fixed;left:18px;top:18px;z-index:11;width:min(520px, calc(100vw - 36px));max-height:calc(100vh - 110px);overflow:auto;
+    background:#efe5cf;color:#1d1a15;border-radius:2px;box-shadow:0 18px 40px rgba(0,0,0,.6),0 0 0 1px rgba(0,0,0,.2);
+    font:500 14px/1.25 "Barlow Condensed","Noto Sans JP","Arial Narrow",sans-serif;
+    opacity:0;transform:translateY(10px);pointer-events:none;transition:opacity .2s,transform .2s;
+  }
+  .plansheet.open{opacity:1;transform:none;pointer-events:auto}
+  .plansheet header{padding:12px 16px 8px;border-bottom:2px solid #1d1a15}
+  .plansheet h2{font-size:18px;font-weight:700;letter-spacing:.06em}
+  .plansheet p{font-size:12px;color:#5d5547;margin-top:2px}
+  .plansheet svg{display:block;width:100%;height:auto}
+  .sheet{
+    position:fixed;right:14px;bottom:calc(var(--plate-h, 40px) + 12px);z-index:10;width:min(320px, calc(100vw - 28px));max-height:min(66vh,600px);
+    display:flex;flex-direction:column;
+    background:#efe5cf;color:#1d1a15;border-radius:2px;
+    box-shadow:0 18px 40px rgba(0,0,0,.6),0 0 0 1px rgba(0,0,0,.2);
+    font:500 14px/1.25 "Barlow Condensed","Arial Narrow",sans-serif;
+    opacity:0;transform:translateY(10px);pointer-events:none;transition:opacity .2s,transform .2s;
+  }
+  .sheet.open{opacity:1;transform:none;pointer-events:auto}
+  .sheet header{padding:14px 16px 10px;border-bottom:2px solid #1d1a15}
+  .sheet h2{font-size:20px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+  .sheet p{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#5d5547;margin-top:2px}
+  .sheet ol{list-style:none;overflow:auto;padding:4px 0 10px}
+  .sheet li{display:grid;grid-template-columns:44px 1fr 28px;gap:8px;padding:4px 16px;border-bottom:1px solid rgba(29,26,21,.12);font-variant-numeric:tabular-nums}
+  .sheet li b{font-weight:700}
+  .sheet li small{display:block;font-size:11px;letter-spacing:.06em;color:#6b6252;text-transform:uppercase}
+  .sheet li small.nm{color:#8a5a12;font-weight:700;letter-spacing:.12em}
+  .sheet li i{font-style:normal;text-align:right;font-weight:700}
+  .sheet li.past{color:#9b917f}
+  .sheet li.past small{color:#b3aa98}
+  .sheet li.next{background:linear-gradient(90deg,rgba(190,60,30,.12),rgba(190,60,30,0));box-shadow:inset 3px 0 0 #b0442a}
+  .sheet footer{padding:8px 16px 12px;font-size:11px;letter-spacing:.06em;color:#6b6252;border-top:1px solid rgba(29,26,21,.25)}
+  @media (max-width:520px){
+    .plate{right:12px;left:12px;bottom:12px;gap:6px;padding:7px 10px;font-size:12px}
+    .plate button{padding:6px 7px}
+    .grp + .grp{padding-left:0;border-left:0;box-shadow:none}
+    .sheet{right:12px;left:12px;width:auto;bottom:calc(var(--plate-h, 52px) + 18px)}
+  }
+</style>
+</head>
+<body>
+<canvas id="win" aria-hidden="true"></canvas>
+<canvas id="anim" aria-hidden="true"></canvas>
+<canvas id="room" aria-hidden="true"></canvas>
+
+<main class="scene" aria-hidden="true">
+  <div class="world" id="world">
+    <div class="board" id="board">
+      <div class="underside"></div>
+      <i class="screw" style="left:-.37em;top:-.37em"></i><i class="screw" style="right:-.37em;top:-.37em"></i>
+      <i class="screw" style="left:-.37em;bottom:-.37em"></i><i class="screw" style="right:-.37em;bottom:-.37em"></i>
+      <div class="head"><span class="title">DEPARTURES</span><span class="sub">SOUTHERN REGION</span><div class="clockbox"><div class="flaps" id="date"></div><div class="flaps" id="clock"></div></div></div>
+      <div class="cols"><span>TIME</span><span>DESTINATION</span><span>PLAT</span><span>REMARKS</span></div>
+      <div class="glass"></div>
+      <div class="maker">INDICATOR No. 2 · S.R.</div>
+      <canvas class="light" id="shade"></canvas>
+      <canvas class="light" id="glow"></canvas>
+    </div>
+  </div>
+</main>
+<canvas id="crowd" aria-hidden="true"></canvas>
+<canvas id="front" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+
+<!-- 読み上げ用：表は読み上げ対象から外し、変わった行だけを短く知らせる -->
+<section class="sr-only">
+  <h1>London Victoria departures, 1965</h1>
+  <p id="srClock"></p>
+  <table><thead><tr><th>Time</th><th>Destination</th><th>Platform</th><th>Remarks</th><th>Train / calling at</th></tr></thead><tbody id="srBody"></tbody></table>
+  <p id="srAnnounce" aria-live="polite" aria-atomic="true"></p>
+</section>
+
+<div class="plate" role="toolbar" aria-label="Board controls">
+  <div class="grp" role="group" aria-label="Clock mode">
+    <button data-mode="live" data-i18n="live" aria-pressed="true" title="実際の時刻（日本時間）で動かす"><span class="lamp"></span>Live</button>
+    <button data-mode="demo" data-i18n="demo" aria-pressed="false" title="時間を早送りして一日を眺める（人も電車も同じ倍率で動く）"><span class="lamp"></span>Demo</button>
+    <button id="nowBtn" data-i18n="now" title="実際の現在時刻（日本時間）に戻る">Now</button>
+  </div>
+  <div class="grp" role="group" aria-label="Demo speed" id="rateGrp" hidden>
+    <button data-rate="60" aria-pressed="true" title="1秒で1分">×60</button>
+    <button data-rate="240" aria-pressed="false" title="1秒で4分">×240</button>
+  </div>
+  <div class="grp">
+    <button id="sound" data-i18n="sound" aria-pressed="false" title="フラップ・足音・電車の音・時間帯のジャズ"><span class="lamp"></span>Sound</button>
+    <button id="menuBtn" aria-expanded="false" aria-controls="menu" title="Menu">☰</button>
+  </div>
+</div>
+<div class="menu" id="menu" role="menu">
+  <div class="mrow"><button data-lang="en" aria-pressed="false">EN</button><button data-lang="ja" aria-pressed="false">日本語</button></div>
+  <button id="volBtn" data-i18n="vol" aria-pressed="false" aria-controls="mixer">Volume</button>
+  <button id="planBtn" data-i18n="plan" aria-pressed="false" aria-controls="planSheet">Plan</button>
+  <button id="ttBtn" data-i18n="tt" aria-pressed="false" aria-controls="sheet">Timetable</button>
+</div>
+<aside class="mixer" id="mixer" aria-label="Volume"><header><h2 id="volH"></h2><p id="volP"></p><p id="nowPlaying" class="np"></p></header><div id="volRows"></div></aside>
+<aside class="plansheet" id="planSheet" aria-label="Station plan"><header><h2 id="planH"></h2><p id="planP"></p></header><div id="planSvg"></div></aside>
+<aside class="sheet" id="sheet" aria-label="Timetable">
+  <header><h2>Departures</h2><p>London Victoria · Southern Region · Summer 1965</p></header>
+  <ol id="ttBody"></ol>
+  <footer>Times shown are scheduled departures. For running information please consult the indicator.</footer>
+</aside>
+
+<script>
+(() => {
+  /* =========================================================
+     時刻表：1965年夏、英国国鉄南部管区のロンドン・ヴィクトリア駅（架空のダイヤ）
+     Golden Arrow・Brighton Belle・Night Ferry・Dover Marine が揃って走っていた時代に合わせ、
+     行き先と停車駅もその時代の呼び名にそろえている（例：DORKING NORTH）。
+     ========================================================= */
+  // 毎時同じ分に出る通常列車（クロックフェイス・ダイヤ）。
+  // 当時の運転時刻表は30秒単位（½分）で組まれていたので、秒は :00 か :30 になる
+  const PATTERN = [
+    {m:4,  s:0,  dest:"BRIGHTON",        plat:15, svc:"FAST"},
+    {m:11, s:30, dest:"LITTLEHAMPTON",   plat:14, svc:"FAST"},
+    {m:17, s:0,  dest:"ORPINGTON",       plat:3,  svc:"STOPPING"},
+    {m:23, s:30, dest:"DOVER PRIORY",    plat:8,  svc:"FAST"},
+    {m:31, s:0,  dest:"EASTBOURNE",      plat:16, svc:"FAST"},
+    {m:38, s:30, dest:"SEVENOAKS",       plat:4,  svc:"STOPPING"},
+    {m:44, s:0,  dest:"RAMSGATE",        plat:7,  svc:"FAST"},
+    {m:52, s:30, dest:"PORTSMOUTH HBR",  plat:16, svc:"FAST"},
+  ];
+  // ラッシュ時だけ増発
+  const PEAK = [
+    {m:8,  s:30, dest:"BROMLEY SOUTH",  plat:5,  svc:"STOPPING"},
+    {m:27, s:0,  dest:"EAST CROYDON",   plat:12, svc:"STOPPING"},
+    {m:48, s:30, dest:"HAYWARDS HEATH", plat:13, svc:"FAST"},
+  ];
+  // 停車駅（Calling at）
+  const CALLING = {
+    "BRIGHTON":       "EAST CROYDON · BRIGHTON",
+    "LITTLEHAMPTON":  "CLAPHAM JN · EAST CROYDON · GATWICK AIRPORT · THREE BRIDGES · HORSHAM · ARUNDEL · LITTLEHAMPTON",
+    "ORPINGTON":      "BRIXTON · HERNE HILL · PENGE EAST · BECKENHAM JN · BROMLEY SOUTH · BICKLEY · PETTS WOOD · ORPINGTON",
+    "DOVER PRIORY":   "BROMLEY SOUTH · CHATHAM · FAVERSHAM · CANTERBURY EAST · DOVER PRIORY",
+    "EASTBOURNE":     "EAST CROYDON · HAYWARDS HEATH · LEWES · POLEGATE · EASTBOURNE",
+    "SEVENOAKS":      "BRIXTON · HERNE HILL · BROMLEY SOUTH · ST MARY CRAY · SWANLEY · OTFORD · BAT & BALL · SEVENOAKS",
+    "RAMSGATE":       "BROMLEY SOUTH · CHATHAM · FAVERSHAM · WHITSTABLE · HERNE BAY · MARGATE · RAMSGATE",
+    "PORTSMOUTH HBR": "CLAPHAM JN · SUTTON · DORKING NORTH · HORSHAM · CHICHESTER · HAVANT · PORTSMOUTH & SOUTHSEA · PORTSMOUTH HBR",
+    "BROMLEY SOUTH":  "BRIXTON · HERNE HILL · WEST DULWICH · SYDENHAM HILL · PENGE EAST · BECKENHAM JN · SHORTLANDS · BROMLEY SOUTH",
+    "EAST CROYDON":   "BATTERSEA PARK · CLAPHAM JN · BALHAM · STREATHAM COMMON · NORBURY · THORNTON HEATH · EAST CROYDON",
+    "HAYWARDS HEATH": "CLAPHAM JN · EAST CROYDON · REDHILL · GATWICK AIRPORT · THREE BRIDGES · HAYWARDS HEATH",
+  };
+  // 名前のある列車と、大陸への連絡列車
+  const BELLE = {dest:"BRIGHTON", plat:17, name:"BRIGHTON BELLE", note:"ALL PULLMAN ELECTRIC · NON STOP TO BRIGHTON"};
+  const NAMED = [
+    {t:"08:35", dest:"NEWHAVEN HBR",   plat:15, name:"BOAT TRAIN",   note:"NEWHAVEN HARBOUR FOR DIEPPE AND PARIS"},
+    {t:"11:00", dest:"DOVER MARINE",   plat:8,  name:"GOLDEN ARROW", note:"ALL PULLMAN · DOVER MARINE FOR CALAIS AND PARIS NORD"},
+    {t:"13:00", ...BELLE},
+    {t:"14:00", dest:"FOLKESTONE HBR", plat:8,  name:"BOAT TRAIN",   note:"FOLKESTONE HARBOUR FOR BOULOGNE"},
+    {t:"15:00", ...BELLE},
+    {t:"19:00", ...BELLE},
+    {t:"20:20", dest:"NEWHAVEN HBR",   plat:15, name:"BOAT TRAIN",   note:"NIGHT SAILING TO DIEPPE"},
+    {t:"22:00", dest:"PARIS NORD",     plat:2,  name:"NIGHT FERRY",  note:"SLEEPING CARS · VIA DOVER MARINE AND DUNKERQUE"},
+  ];
+  const toMin = s => { const [h,m] = s.split(":").map(Number); return h*60+m; };
+  const TIMETABLE = (() => {
+    const list = [];
+    for(let h=5; h<=24; h++){
+      const late = h >= 22, early = h < 6;
+      const peak = (h >= 7 && h < 10) || (h >= 16 && h < 19);
+      for(const p of PATTERN){
+        if((late || early) && p.svc === "STOPPING") continue;
+        if(h === 24 && p.m > 35) continue;
+        list.push({time:h*60+p.m+p.s/60, dest:p.dest, plat:p.plat, svc:p.svc});
+      }
+      if(peak) for(const p of PEAK) list.push({time:h*60+p.m+p.s/60, dest:p.dest, plat:p.plat, svc:p.svc});
+    }
+    for(const n of NAMED) list.push({time:toMin(n.t), dest:n.dest, plat:n.plat, svc:"NAMED", name:n.name, note:n.note});
+    return list.sort((a,b) => a.time - b.time);
+  })();
+
+  /* ---------- 当日の運行（遅れ・運休は日付ごとに変わる） ---------- */
+  // 盤の時計（実時刻・現在時刻）は日本時間で動かす。空の明るさの計算だけはロンドンの夏時間の時差を使う
+  const tzFmt = tz => { try{ return new Intl.DateTimeFormat("en-GB", {timeZone:tz, year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", second:"2-digit", hourCycle:"h23"}); }catch(e){ return null; } };
+  const LON = tzFmt("Europe/London"), JST = tzFmt("Asia/Tokyo");
+  function wallIn(fmt, ms, fallbackOffsetMin){
+    if(!fmt) return ms + fallbackOffsetMin*60000;
+    const p = {}; for(const x of fmt.formatToParts(new Date(ms))) p[x.type] = x.value;
+    return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second) + ms % 1000;
+  }
+  const lonWall = ms => wallIn(LON, ms, -new Date(ms).getTimezoneOffset());
+  const clockWall = ms => wallIn(JST, ms, 540);      // 日本時間（UTC+9、夏時間なし）
+  let lastWall = 0, lastWallAt = -1e9;
+  const BASEW = (() => { const w = clockWall(Date.now()); return w - (w % 86400000); })();
+  const dayDate = i => new Date(BASEW + i*86400000);       // その日のロンドンの日付（UTC の値で読む）
+  const dayKey = i => { const d = dayDate(i); return d.getUTCFullYear()*10000 + (d.getUTCMonth()+1)*100 + d.getUTCDate(); };
+  const plans = new Map();
+  function plan(day){
+    if(plans.has(day)) return plans.get(day);
+    let s = (dayKey(day) * 2654435761) >>> 0;
+    const r = () => { s = (s + 0x6D2B79F5) >>> 0; let x = s; x = Math.imul(x ^ x>>>15, x|1); x ^= x + Math.imul(x ^ x>>>7, x|61); return ((x ^ x>>>14) >>> 0) / 4294967296; };
+    const p = TIMETABLE.map(t => {
+      const x = r();
+      return {
+        delay: x < .07 ? 5 : x < .11 ? 10 : x < .13 ? 15 : 0,
+        cancelled: !t.name && r() < .015,
+      };
+    });
+    plans.set(day, p);
+    return p;
+  }
+
+  /* =========================================================
+     日本語／英語
+     日本語のときは、当時の日本の反転フラップ式案内表示機と同じく、
+     行先を「1枚に1駅名」の幕で出す（英語は1文字ずつのフラップ）
+     ========================================================= */
+  const JA_STN = {
+    "BRIGHTON":"ブライトン", "LITTLEHAMPTON":"リトルハンプトン", "ORPINGTON":"オーピントン", "DOVER PRIORY":"ドーヴァー・プライオリー",
+    "EASTBOURNE":"イーストボーン", "SEVENOAKS":"セヴンオークス", "RAMSGATE":"ラムズゲート", "PORTSMOUTH HBR":"ポーツマス・ハーバー",
+    "BROMLEY SOUTH":"ブロムリー・サウス", "EAST CROYDON":"イースト・クロイドン", "HAYWARDS HEATH":"ヘイワーズ・ヒース",
+    "NEWHAVEN HBR":"ニューヘイヴン・ハーバー", "DOVER MARINE":"ドーヴァー・マリン", "FOLKESTONE HBR":"フォークストン・ハーバー", "PARIS NORD":"パリ北駅",
+    "CLAPHAM JN":"クラパム・ジャンクション", "GATWICK AIRPORT":"ガトウィック空港", "THREE BRIDGES":"スリー・ブリッジズ", "HORSHAM":"ホーシャム",
+    "ARUNDEL":"アランデル", "BRIXTON":"ブリクストン", "HERNE HILL":"ハーン・ヒル", "PENGE EAST":"ペンジ・イースト", "BECKENHAM JN":"ベッケナム・ジャンクション",
+    "BICKLEY":"ビックリー", "PETTS WOOD":"ペッツ・ウッド", "CHATHAM":"チャタム", "FAVERSHAM":"フェイヴァシャム", "CANTERBURY EAST":"カンタベリー・イースト",
+    "LEWES":"ルイス", "POLEGATE":"ポールゲート", "ST MARY CRAY":"セント・メアリー・クレイ", "SWANLEY":"スワンリー", "OTFORD":"オットフォード",
+    "BAT & BALL":"バット・アンド・ボール", "WHITSTABLE":"ウィットステーブル", "HERNE BAY":"ハーン・ベイ", "MARGATE":"マーゲート", "SUTTON":"サットン",
+    "DORKING NORTH":"ドーキング・ノース", "CHICHESTER":"チチェスター", "HAVANT":"ハヴァント", "PORTSMOUTH & SOUTHSEA":"ポーツマス・アンド・サウスシー",
+    "WEST DULWICH":"ウェスト・ダリッジ", "SYDENHAM HILL":"シデナム・ヒル", "SHORTLANDS":"ショートランズ", "BATTERSEA PARK":"バタシー・パーク",
+    "BALHAM":"バラム", "STREATHAM COMMON":"ストレタム・コモン", "NORBURY":"ノーベリー", "THORNTON HEATH":"ソーントン・ヒース", "REDHILL":"レッドヒル",
+    "SERVICE ENDED":"本日の運転終了",
+  };
+  const JA_NAME = {"BOAT TRAIN":"臨港列車", "GOLDEN ARROW":"ゴールデン・アロー", "BRIGHTON BELLE":"ブライトン・ベル", "NIGHT FERRY":"ナイト・フェリー"};
+  const JA_NOTE = {
+    "NEWHAVEN HARBOUR FOR DIEPPE AND PARIS":"ニューヘイヴン港でディエップ・パリ方面の船に連絡",
+    "ALL PULLMAN · DOVER MARINE FOR CALAIS AND PARIS NORD":"全車プルマン · ドーヴァー・マリンでカレー・パリ北駅方面に連絡",
+    "ALL PULLMAN ELECTRIC · NON STOP TO BRIGHTON":"全車プルマンの電車 · ブライトンまでノンストップ",
+    "FOLKESTONE HARBOUR FOR BOULOGNE":"フォークストン港でブローニュ方面の船に連絡",
+    "NIGHT SAILING TO DIEPPE":"ディエップ行き夜行船に連絡",
+    "SLEEPING CARS · VIA DOVER MARINE AND DUNKERQUE":"寝台車 · ドーヴァー・マリン、ダンケルク経由",
+  };
+  const JA_REM = {"":"", "ON TIME":"定刻", "BOARDING":"ご乗車ください", "FINAL CALL":"まもなく発車", "DEPARTED":"発車しました",
+    "5 MIN LATE":"5分遅れ", "10 MIN LATE":"10分遅れ", "15 MIN LATE":"15分遅れ", "CANCELLED":"運休"};
+  const I18N = {
+    en: {
+      title:"DEPARTURES", sub:"SOUTHERN REGION", cols:["TIME","DESTINATION","PLAT","REMARKS"], maker:"INDICATOR No. 2 · S.R.",
+      callingAt:"CALLING AT", stn: s => s, name: s => s, note: s => s, rem: s => s, sep:" · ",
+      closed: f => `NO FURTHER DEPARTURES TONIGHT · FIRST TRAIN ${f ? hm(f.abs) + " TO " + f.t.dest : ""}`,
+      ui:{live:"Live", demo:"Demo", now:"Now", speed:"Speed", sound:"Sound", tt:"Timetable", plan:"Plan", vol:"Volume"},
+      volH:"Volume", volP:"Each sound has its own level. Turn Sound on to hear them.",
+      vol:{master:"Master", music:"Music (jazz that changes with the time of day)", flaps:"Indicator flaps", crowd:"Crowd murmur", steps:"Footsteps", train:"Trains running (motor · rail joints)", brakes:"Brake squeal", doors:"Slam doors", whistle:"Guard's whistle"},
+      wd:["SUN","MON","TUE","WED","THU","FRI","SAT"], mon:["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"],
+      dateText:(d) => `${["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][d.getUTCDay()]} ${d.getUTCDate()} ${["January","February","March","April","May","June","July","August","September","October","November","December"][d.getUTCMonth()]}`,
+      planH:"Station plan", planP:"London Victoria (Brighton side), simplified · the view is drawn from this plan",
+      sheetH:"Departures", sheetP:"London Victoria · Southern Region · Summer 1965",
+      sheetF:"Times shown are scheduled departures. For running information please consult the indicator.",
+      archSign:"TO ALL PLATFORMS  9 – 17", leftSign:"◄  PLATFORMS 1 – 8",
+      sr: s => `${s.time} ${s.name ? s.name + " " : ""}to ${s.destText}, platform ${s.plat.trim()}: ${s.remText.toLowerCase()}.`,
+      srH:"London Victoria departures, 1965", srTime:"Time",
+    },
+    ja: {
+      title:"発車案内", sub:"英国国鉄 南部管区", cols:["時刻","行先","番線","備考"], maker:"第2号 案内表示機 · 南部管区",
+      callingAt:"停車駅", stn: s => JA_STN[s] || s, name: s => JA_NAME[s] || s, note: s => JA_NOTE[s] || s, rem: s => JA_REM[s] ?? s, sep:"・",
+      closed: f => `本日の発車はすべて終了しました · 始発 ${f ? hm(f.abs) + " " + (JA_STN[f.t.dest] || f.t.dest) + "行き" : ""}`,
+      ui:{live:"実時刻", demo:"早送り", now:"現在時刻", speed:"速さ", sound:"音", tt:"時刻表", plan:"配置図", vol:"音量"},
+      volH:"音量", volP:"音の種類ごとに調節できます。「音」をオンにすると聞こえます。",
+      vol:{master:"全体", music:"音楽（時間帯で変わるジャズ）", flaps:"発車案内のフラップ", crowd:"構内のざわめき", steps:"足音", train:"電車の走行音（モーター・レールの継ぎ目）", brakes:"ブレーキのきしみ", doors:"ドアを閉める音", whistle:"車掌の笛"},
+      wd:["(日)","(月)","(火)","(水)","(木)","(金)","(土)"], mon:["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"],
+      dateText:(d) => `${d.getUTCMonth()+1}月${d.getUTCDate()}日（${"日月火水木金土"[d.getUTCDay()]}曜日）`,
+      planH:"配置図（上から見た図）", planP:"ロンドン・ヴィクトリア駅（ブライトン側）を簡略化 · 画面の絵はこの図から作っています",
+      sheetH:"発車時刻表", sheetP:"ロンドン・ヴィクトリア駅 · 南部管区 · 1965年夏",
+      sheetF:"表示は定刻です。当日の運行状況は発車案内でご確認ください。",
+      archSign:"9〜17番線 のりば", leftSign:"◄  1〜8番線",
+      sr: s => `${s.time}発 ${s.name ? s.name + " " : ""}${s.destText}行き、${s.plat.trim()}番線：${s.remText}。`,
+      srH:"ロンドン・ヴィクトリア駅 発車案内（1965年）", srTime:"時刻",
+    },
+  };
+  let LANG = (() => { try{ return localStorage.getItem("vic-lang") || ((navigator.language || "").startsWith("ja") ? "ja" : "en"); }catch(e){ return "en"; } })();
+  const L10 = () => I18N[LANG];
+
+  /* =========================================================
+     フラップ
+     ========================================================= */
+  const LETTERS = " ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+  const DIGITS  = " 0123456789".split("");
+  // 並び順：ふだん通る「定刻→搭乗→最終案内→発車済」を続けて並べ、遅れと運休は発車済の後ろにまとめる。
+  // 途中を通過するフラップは無彩色で描き、止まった面だけに色を付けるので、通過中に赤や琥珀が光らない。
+  const REMARKS = ["", "ON TIME", "BOARDING", "FINAL CALL", "DEPARTED", "5 MIN LATE", "10 MIN LATE", "15 MIN LATE", "CANCELLED"];
+  const REM_CLASS = {
+    "BOARDING":"go", "FINAL CALL":"go",                             // 乗れる：いちばん明るい白
+    "5 MIN LATE":"amber", "10 MIN LATE":"amber", "15 MIN LATE":"amber", // 遅れ
+    "CANCELLED":"red",                                              // 乗れない
+    "DEPARTED":"dim",
+  };
+  // 日本語の行先幕に載っている駅名（盤が表示しうる行先すべて＋終了の幕）
+  const DEST_ITEMS = ["", ...new Set(TIMETABLE.map(t => t.dest)), "SERVICE ENDED"];
+  const ROWS = 5, DEST_LEN = 16, STEP = 50;
+
+  let audio = null, soundOn = false, lastClick = 0, noiseBuf = null;
+  // 音量（種類ごと）。0〜150%、前回の設定を覚えておく
+  const SOUNDS = ["master", "music", "flaps", "crowd", "steps", "train", "brakes", "doors", "whistle"];
+  const VOL_DEFAULT = {master:.8, music:.55, flaps:.7, crowd:.7, steps:.7, train:.8, brakes:.6, doors:.7, whistle:.7};
+  const VOL = (() => { try{ return {...VOL_DEFAULT, ...JSON.parse(localStorage.getItem("vic-vol") || "{}")}; }catch(e){ return {...VOL_DEFAULT}; } })();
+  function setVol(k, v){
+    VOL[k] = v;
+    try{ localStorage.setItem("vic-vol", JSON.stringify(VOL)); }catch(e){}
+    if(!audio || !SND.master) return;
+    const node = k === "master" ? SND.master : SND.bus[k];
+    node.gain.setTargetAtTime(v, audio.currentTime, .05);
+  }
+  function click(gain=1){
+    if(!soundOn || !audio || !SND.master) return;
+    const now = audio.currentTime;
+    if(now - lastClick < 0.012) return;
+    lastClick = now;
+    const src = audio.createBufferSource(); src.buffer = noiseBuf;
+    const f = audio.createBiquadFilter(); f.type = "bandpass"; f.Q.value = 1.4; f.frequency.value = 1400 + Math.random()*1600;
+    const g = audio.createGain(); g.gain.value = (0.1 + Math.random()*0.08) * gain;
+    src.connect(f).connect(g).connect(SND.bus.flaps); src.start();
+  }
+
+  const HALVES = '<div class="h t"><span></span></div><div class="h b"><span></span></div><div class="f t"><span></span></div><div class="f b"><span></span></div>';
+  function flipOnce(o, d, paintNew, done){
+    o.ft.style.visibility = "visible";
+    o.ft.animate([{transform:"rotateX(0deg)"},{transform:"rotateX(-90deg)"}], {duration:d*.5, easing:"cubic-bezier(.5,0,1,1)"})
+      .onfinish = () => {
+        o.ft.style.visibility = "hidden";
+        paintNew(o.fb); o.fb.style.visibility = "visible";
+        o.fb.animate([{transform:"rotateX(90deg)"},{transform:"rotateX(0deg)"}], {duration:d*.5, easing:"cubic-bezier(0,0,.4,1.4)"})
+          .onfinish = () => { paintNew(o.hb); o.fb.style.visibility = "hidden"; done(); };
+      };
+  }
+
+  class Flap{
+    // items は内部の値、label はそれを面に書く文字（言語ごと）
+    constructor(parent, items, cls="", classes={}, label = x => x){
+      this.items = items; this.classes = classes; this.label = label; this.cur = 0; this.target = 0; this.busy = false; this.colored = true;
+      const el = this.el = document.createElement("div");
+      el.className = "tile " + cls;
+      el.innerHTML = HALVES;
+      [this.ht, this.hb, this.ft, this.fb] = [...el.children];
+      parent.appendChild(el);
+      this.paint(this.ht, items[0], true); this.paint(this.hb, items[0], true);
+      this.el.classList.toggle("blank", items[0] === " " || items[0] === "");
+    }
+    paint(half, txt, colored){
+      const s = half.firstChild, t = this.label(txt);
+      s.textContent = t === " " || t === "" ? " " : t;
+      s.className = colored ? (this.classes[txt] || "") : "";
+    }
+    // 言語を切り替えた時などは、めくらずに一度で表示を変える
+    jump(v){
+      let i = this.items.indexOf(v); if(i < 0) i = 0;
+      this.cur = this.target = i; this.colored = true;
+      this.paint(this.ht, this.items[i], true); this.paint(this.hb, this.items[i], true);
+      this.el.classList.toggle("blank", this.items[i] === " " || this.items[i] === "");
+    }
+    set(v, delay=0){
+      let i = this.items.indexOf(v); if(i < 0) i = 0;
+      this.target = i;
+      if(i === this.cur || this.busy) return;
+      this.busy = true;
+      setTimeout(() => this.step(), delay);
+    }
+    step(){
+      if(!this.el.isConnected){ this.busy = false; return; }
+      if(this.cur === this.target){
+        this.busy = false;
+        const t = this.items[this.cur]; this.el.classList.toggle("blank", t === " " || t === "");
+        return;
+      }
+      this.el.classList.remove("blank");
+      const oldT = this.items[this.cur], oldC = this.colored;
+      this.cur = (this.cur + 1) % this.items.length;
+      const newT = this.items[this.cur], newC = this.cur === this.target;   // 止まる面だけ色付き
+      this.colored = newC;
+      this.paint(this.ht, newT, newC); this.paint(this.ft, oldT, oldC);
+      flipOnce(this, STEP * (0.85 + Math.random()*0.3), h => this.paint(h, newT, newC), () => { click(); this.step(); });
+    }
+  }
+  // 停車駅の札：中身を差し替えるたびに1回だけ返る
+  class Slat{
+    constructor(parent){
+      const el = this.el = document.createElement("div");
+      el.className = "tile slat"; el.innerHTML = HALVES;
+      [this.ht, this.hb, this.ft, this.fb] = [...el.children];
+      parent.appendChild(el);
+      this.key = ""; this.html = ""; this.next = null; this.busy = false;
+    }
+    paint(half, html, cls=""){
+      const s = half.firstChild; s.className = cls;
+      s.innerHTML = `<span class="fit">${html}</span>`;
+      // はみ出す時は省略記号ではなく、文字を少し詰めて全部載せる（看板の書き文字と同じ扱い）
+      const f = s.firstChild, pad = parseFloat(getComputedStyle(s).paddingLeft) || 0;
+      const avail = s.clientWidth - pad*2, w = f.offsetWidth;
+      if(w > avail && avail > 0) f.style.transform = `scaleX(${(avail / w).toFixed(3)})`;
+    }
+    jump(key, html, cls=""){ this.key = key; this.html = html; this.cls = cls; this.next = null; this.paint(this.ht, html, cls); this.paint(this.hb, html, cls); }
+    set(key, html, cls="", delay=0){
+      if(key === this.key && !this.next) return;
+      this.next = {key, html, cls};
+      if(this.busy) return;
+      this.busy = true;
+      setTimeout(() => this.flip(), delay);
+    }
+    flip(){
+      const n = this.next; this.next = null;
+      if(!n || n.key === this.key || !this.el.isConnected){ this.busy = false; return; }
+      const oh = this.html, oc = this.cls || "";
+      this.key = n.key; this.html = n.html; this.cls = n.cls;
+      this.paint(this.ht, n.html, n.cls); this.paint(this.ft, oh, oc);
+      flipOnce(this, 180, h => this.paint(h, n.html, n.cls), () => { click(1.6); this.flip(); });
+    }
+  }
+  const setChars = (flaps, text, stagger=16) => {
+    const t = text.toUpperCase().padEnd(flaps.length, " ");
+    flaps.forEach((f,i) => f.set(t[i], i*stagger + Math.random()*20));
+  };
+  const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+  const slatHTML = t => {
+    const l = L10();
+    return t.name
+      ? `<b>${esc(l.name(t.name))}</b>${esc(l.note(t.note))}`
+      : (() => {
+          // 日本語は駅名が長いので、6駅以上の時は「主な停車駅」にして乗換駅と終点を残す
+          let st = (CALLING[t.dest] || t.dest).split(" · "), head = l.callingAt;
+          if(LANG === "ja" && st.length > 5){
+            const major = new Set(["CLAPHAM JN","EAST CROYDON","GATWICK AIRPORT","HORSHAM","BROMLEY SOUTH","CHATHAM","CANTERBURY EAST","HERNE HILL","HAYWARDS HEATH","LEWES","SWANLEY","MARGATE","DORKING NORTH","CHICHESTER","BECKENHAM JN","BALHAM"]);
+            st = st.filter((x,i) => major.has(x) || i === st.length-1); head = "主な停車駅";
+          }
+          return `<i>${head}</i>${esc(st.map(l.stn).join(l.sep))}`;
+        })();
+  };
+
+  /* ---------- 盤を組み立てる（言語を切り替えたら組み直す） ---------- */
+  const board = document.getElementById("board");
+  const shadeCv = document.getElementById("shade");
+  const clockEl = document.getElementById("clock");
+  // 時計は時・分・秒
+  const clock = [0,1,2,3,4,5,6,7].map(i => i === 2 || i === 5 ? new Flap(clockEl, [":"], "clock colon") : new Flap(clockEl, DIGITS, "clock"));
+  let rows = [];
+  function buildBoard(){
+    rows.forEach(r => r.el.remove());
+    rows = [];
+    const l = L10();
+    board.classList.toggle("ja", LANG === "ja");
+    document.documentElement.lang = LANG;
+    board.querySelector(".title").textContent = l.title;
+    board.querySelector(".sub").textContent = l.sub;
+    board.querySelectorAll(".cols span").forEach((s,i) => s.textContent = l.cols[i]);
+    board.querySelector(".maker").textContent = l.maker;
+    // 日付：曜日・日・月を、それぞれ1枚の幕で（英語は「SUN 15 NOV」、日本語は「11月15日(日)」の順）
+    const dateEl = document.getElementById("date"); dateEl.innerHTML = "";
+    const DAYS = Array.from({length:31}, (_, i) => String(i + 1));
+    const wdF = new Flap(dateEl, ["", ...l.wd], "word wd"), dF = new Flap(dateEl, ["", ...DAYS], "word day", {}, v => v && LANG === "ja" ? v + "日" : v), mF = new Flap(dateEl, ["", ...l.mon], "word mon");
+    if(LANG === "ja"){ dateEl.append(mF.el, dF.el, wdF.el); }
+    dateFlaps = {wd: wdF, d: dF, m: mF}; shownDate = "";
+    for(let r=0;r<ROWS;r++){
+      const row = document.createElement("div"); row.className = "row";
+      const cell = cls => { const d = document.createElement("div"); d.className = "flaps " + cls; row.appendChild(d); return d; };
+      const ct = cell("c-time"), cd = cell("c-dest"), cp = cell("c-plat"), cr = cell("c-rem"), cc = cell("c-call");
+      board.insertBefore(row, shadeCv);
+      rows.push({
+        el: row,
+        time: [0,1,2,3,4].map(i => i === 2 ? new Flap(ct, [" ", ":"], "d colon") : new Flap(ct, DIGITS, "d")),
+        dest: LANG === "ja" ? [new Flap(cd, DEST_ITEMS, "jdest", {}, l.stn)] : Array.from({length:DEST_LEN}, () => new Flap(cd, LETTERS)),
+        plat: [new Flap(cp, DIGITS), new Flap(cp, DIGITS)],
+        rem:  new Flap(cr, REMARKS, "rem", REM_CLASS, l.rem),
+        call: new Slat(cc),
+      });
+    }
+    document.querySelectorAll("[data-i18n]").forEach(e => e.lastChild.textContent = l.ui[e.dataset.i18n]);
+    document.querySelector("#sheet h2").textContent = l.sheetH;
+    document.querySelector("#sheet p").textContent = l.sheetP;
+    document.querySelector("#sheet footer").textContent = l.sheetF;
+    document.querySelector(".sr-only h1").textContent = l.srH;
+    buildSheet();
+    shownSig = ""; prevRem = null; shownClock = "";
+  }
+
+  /* =========================================================
+     運行
+     ========================================================= */
+  let mode = "live", rate = 60, speed = 1;
+  let now = realNow();           // 起動した日の0時からの分（小数）。日をまたいでも増え続ける
+  function realNow(){
+    const t = performance.now();
+    if(t - lastWallAt > 1000){ lastWall = clockWall(Date.now()) - Date.now(); lastWallAt = t; }   // 時差は1秒ごとに確かめる
+    return (Date.now() + lastWall - BASEW) / 60000;
+  }
+  // 時:分:秒（分の小数から）
+  // 列車の時刻は時:分（利用客向けの発車標に秒は出さない。30秒発の列車は切り捨て）
+  const hm = m => hms(m).slice(0,5);
+  const hms = m => {
+    let s = Math.floor(m*60 + 1e-6); s = ((s % 86400) + 86400) % 86400;
+    const p = v => String(v).padStart(2,"0");
+    return p(Math.floor(s/3600)) + ":" + p(Math.floor(s/60) % 60) + ":" + p(s % 60);
+  };
+
+  const CANCEL_HOLD = 20;        // 運休は定刻から20分は盤に残す
+  function status(e){
+    if(e.cancelled) return "CANCELLED";
+    const exp = e.abs + e.delay;
+    if(now >= exp) return "DEPARTED";
+    const left = exp - now;
+    if(left <= 2) return "FINAL CALL";
+    if(e.delay) return e.delay + " MIN LATE";   // 遅れている列車は遅れを優先して出す
+    if(left <= 10) return "BOARDING";
+    return "ON TIME";
+  }
+  function upcoming(){
+    const today = Math.floor(now / 1440), out = [];
+    for(const day of [today-1, today, today+1]){
+      const p = plan(day);
+      TIMETABLE.forEach((t,i) => {
+        const abs = day*1440 + t.time, {delay, cancelled} = p[i];
+        const until = cancelled ? abs + CANCEL_HOLD : abs + delay + 1;   // 発車後1分は「DEPARTED」を残す
+        if(until > now) out.push({t, abs, delay, cancelled});
+      });
+    }
+    return out.sort((a,b) => a.abs - b.abs);
+  }
+  const rowOf = e => ({
+    key: e.abs + "|" + e.t.dest, time: hm(e.abs), dest: e.t.dest,
+    plat: String(e.t.plat).padStart(2," "), rem: status(e), abs: e.abs, platN: e.t.plat,
+    name: e.t.name || "", callKey: LANG + (e.t.name ? "n:" + e.t.name + e.t.note : "c:" + e.t.dest), call: slatHTML(e.t),
+  });
+  function boardState(){
+    const up = upcoming();
+    // 次の列車まで1時間以上あく深夜は「本日の運転は終了しました」を出し、始発を並べる
+    if(!up.length || up[0].abs > now + 60){
+      return [{
+        key:"closed", closed:true, time:"     ", dest:"SERVICE ENDED", plat:"  ", rem:"", name:"",
+        callKey:LANG + "closed", call: esc(L10().closed(up[0])),
+      }, ...up.slice(0, ROWS-1).map(rowOf)];
+    }
+    return up.slice(0, ROWS).map(rowOf);
+  }
+
+  let dateFlaps = null, shownDate = "";
+  const dateOf = m => dayDate(Math.floor(m/1440));
+  let shownClock = "", shownSig = "", lastBoardUpdate = -1e9, prevRem = null, boardNow = [];
+  const MIN_GAP = 4000;   // 盤の書き換えは最短4秒おき（めくれ終わって静止する時間をつくる）
+  let instantNext = false;
+  function update(force){
+    const instant = instantNext; instantNext = false;
+    const ct = hms(now);
+    if(ct !== shownClock){
+      shownClock = ct;
+      [0,1,3,4,6,7].forEach((i,k) => clock[i].set(ct[i], k*25));
+      const d = dateOf(now), l = L10(), dk = d.toISOString().slice(0,10) + LANG;
+      if(dateFlaps && dk !== shownDate){
+        shownDate = dk;
+        const how = instant ? "jump" : "set";
+        dateFlaps.wd[how](l.wd[d.getUTCDay()], 0); dateFlaps.d[how](String(d.getUTCDate()), 60); dateFlaps.m[how](l.mon[d.getUTCMonth()], 120);
+      }
+      document.getElementById("srClock").textContent = l.dateText(d) + " · " + l.srTime + " " + ct.slice(0,5);
+      const b = Math.floor(now / 10);               // 空の色は10分ごとに描き直す
+      if(b !== shedBucket){ shedBucket = b; if(G) paintStatic(); }
+    }
+    const st = boardState();
+    boardNow = st;
+    const sig = JSON.stringify(st);
+    const t = performance.now();
+    if(sig !== shownSig && (force || t - lastBoardUpdate >= MIN_GAP)){
+      shownSig = sig; lastBoardUpdate = t;
+      if(instant) rows.forEach((row, i) => {
+        const s = st[i] || {time:"     ", dest:"", plat:"  ", rem:"", callKey:"", call:"", name:""};
+        row.el.classList.toggle("named", !!s.name);
+        row.time.forEach((f,k) => f.jump(s.time[k]));
+        if(LANG === "ja") row.dest[0].jump(s.dest); else row.dest.forEach((f,k) => f.jump(s.dest.padEnd(DEST_LEN, " ")[k]));
+        row.plat.forEach((f,k) => f.jump(s.plat[k])); row.rem.jump(s.rem);
+        row.call.jump(s.callKey, s.call, s.closed ? "msg" : "");
+      });
+      else rows.forEach((row, i) => {
+        const s = st[i];
+        setTimeout(() => {
+          row.el.classList.toggle("named", !!(s && s.name));
+          if(s){
+            row.time.forEach((f,k) => f.set(s.time[k], k*25));
+            if(LANG === "ja") row.dest[0].set(s.dest); else setChars(row.dest, s.dest);
+            row.plat.forEach((f,k) => f.set(s.plat[k], 120 + k*30));
+            row.rem.set(s.rem, 160);
+            row.call.set(s.callKey, s.call, s.closed ? "msg" : "", 260);
+          } else {
+            row.time.forEach(f => f.set(" "));
+            if(LANG === "ja") row.dest[0].set(""); else setChars(row.dest, "");
+            row.plat.forEach(f => f.set(" "));
+            row.rem.set("");
+            row.call.set("", "", "", 260);
+          }
+        }, i*110);
+      });
+      const l = L10(), plain = h => h.replace(/<[^>]+>/g," ").replace(/&amp;/g,"&").replace(/\s+/g," ").trim();
+      document.getElementById("srBody").innerHTML = st.map(s =>
+        `<tr><td>${s.time.trim()}</td><td>${esc(l.stn(s.dest))}</td><td>${s.plat.trim()}</td><td>${esc(l.rem(s.rem))}</td><td>${esc(plain(s.call))}</td></tr>`).join("");
+      announce(st);
+      updateSheet();
+    }
+  }
+  // 読み上げ：状態が変わった行だけ
+  function announce(st){
+    const cur = new Map(st.filter(s => !s.closed).map(s => [s.key, s]));
+    if(prevRem){
+      const msgs = [], l = L10();
+      for(const [k, s] of cur){
+        const before = prevRem.get(k);
+        if(before !== undefined && before !== s.rem && s.rem !== "ON TIME")
+          msgs.push(l.sr({...s, time: s.time.slice(0,5), name: s.name ? l.name(s.name) : "", destText: l.stn(s.dest), remText: l.rem(s.rem)}));
+      }
+      if(msgs.length && mode === "live") document.getElementById("srAnnounce").textContent = msgs.join(" ");
+    }
+    prevRem = new Map([...cur].map(([k,s]) => [k, s.rem]));
+  }
+
+  let lastT = performance.now();
+  function loop(t){
+    const dt = Math.min(250, t - lastT); lastT = t;
+    if(mode === "live") now = realNow();
+    else now += dt/60000 * speed;
+    update(false);
+    animate(dt);
+    requestAnimationFrame(loop);
+  }
+
+  /* ---------- 印刷された時刻表（定刻のみ。当日の遅れは載らない） ---------- */
+  const sheet = document.getElementById("sheet"), ttBody = document.getElementById("ttBody");
+  let ttItems = [], lastNext = -1;
+  function buildSheet(){
+    const l = L10();
+    ttBody.innerHTML = TIMETABLE.map(t =>
+      `<li><b>${hm(t.time)}</b><span>${esc(l.stn(t.dest))}${t.name ? `<small class="nm">${esc(l.name(t.name))}</small>` : `<small>${LANG === "ja" ? (t.svc === "FAST" ? "快速" : "各駅停車") : t.svc}</small>`}</span><i>${t.plat}</i></li>`).join("");
+    ttItems = [...ttBody.children]; lastNext = -1;
+  }
+  function updateSheet(){
+    const m = ((now % 1440) + 1440) % 1440;
+    const next = TIMETABLE.findIndex(t => t.time > m);
+    ttItems.forEach((li,i) => { li.classList.toggle("past", next === -1 || i < next); li.classList.toggle("next", i === next); });
+    if(next !== lastNext && sheet.classList.contains("open") && next >= 0) ttItems[next].scrollIntoView({block:"center", behavior:"smooth"});
+    lastNext = next;
+  }
+
+  /* =========================================================
+     配置図（上から見た図）。駅の絵・電車・人の動きは、すべてこの図から作る
+     モデル：ロンドン・ヴィクトリア駅のブライトン側（9番線以降）を簡略化したもの
+     ・頭端式の終着駅。北の端に横長のコンコース、その南に改札の柵、さらに南へホームが伸びる
+     ・南を向いて立つと、左（東）が1〜8番線のチャタム側の駅、右（西）がブライトン側
+     ・駅前の通り（北）から入り、コンコースを横切って改札からホームへ
+     ・座標：x は南を向いたときの右が正（＝西）、z は北が正、単位はメートル。
+       発車標の中心を原点にする。高さ h は床からのメートル
+     ========================================================= */
+  const PLAN = {
+    camera:   {z: 18, h: 4.4},                 // 北側の中2階から南を見る
+    boardBottom: 5.2,                          // 発車標は梁から鎖で吊る両面式（裏側からも読める）
+    barrierZ: -22, bufferZ: -25, stopZ: -26,   // 改札の柵・車止め・停止位置
+    screenBottom: 4.6, roofH: 15,              // 柵の上の妻面（ガラスの壁）と屋根
+    tracks: {12:-18.4, 13:-14.4, 14:-4.0, 15:0, 16:10.4, 17:14.4},
+    islands: [
+      {x0:-27.2, x1:-20.0, plats:[11,12]},
+      {x0:-12.8, x1:-5.6,  plats:[13,14]},
+      {x0:1.6,   x1:8.8,   plats:[15,16]},
+      {x0:16.0,  x1:23.2,  plats:[17,18]},
+    ],
+    stairs:  {x0:-9.5, x1:-5.5, z0:-14, z1:-10},   // 地下鉄への階段（北側が上り口）
+    eastX: -32, westX: 30,                     // コンコースの東の端（1〜8番線へ）・西の端
+    entranceZ: 18,                             // 駅前の通りからの入口（視点の中2階の真下。画面の手前・下）
+    lamps: [-2.3, 2.3],                        // 発車標を照らす吊り下げ灯（x）
+  };
+  const islandOf = p => PLAN.islands.find(i => i.plats.includes(p));
+  const faceOf = p => { const i = islandOf(p); return i ? {isl:i, x: i.plats[0] === p ? i.x0 : i.x1, inward: i.plats[0] === p ? 1 : -1} : null; };
+
+  /* ---------- 画角：配置図のカメラ位置から決める ---------- */
+  const world = document.getElementById("world"), scene = document.querySelector(".scene");
+  const BOARD_EM = 34.5;      // 盤の幅（em）。1em ＝ 20cm として、幅 6.9m の大型の盤
+  let CFG = null;
+  function layout(){
+    const W = innerWidth, H = innerHeight;
+    const portrait = W / H < 1.05;
+    const fs = portrait ? W*0.94 / BOARD_EM : Math.min(W*0.0125, H*0.0205), width = fs*BOARD_EM;
+    CFG = {W, H, fs, width, left:(W - width)/2, persp: PLAN.camera.z*5*fs, portrait};
+    world.style.fontSize = fs + "px";
+    world.style.width = width + "px";
+    world.style.left = CFG.left + "px";
+    world.style.transform = "none";
+    scene.style.perspective = CFG.persp + "px";
+    const bh = world.offsetHeight;
+    CFG.top = portrait ? H*0.15 : H*0.16;           // 上に、盤を吊る梁と屋根のトラスが見える余白
+    CFG.pox = W/2;
+    CFG.poy = CFG.top + bh + (PLAN.boardBottom - PLAN.camera.h)*5*fs;   // 目の高さ
+    world.style.top = CFG.top + "px";
+    scene.style.perspectiveOrigin = `${CFG.pox}px ${CFG.poy}px`;
+  }
+
+  let G = null;
+  function geom(){
+    const {W,H,fs:em,left:wl,top:wt,width:ww,persp:d,pox,poy} = CFG;
+    const wh = world.offsetHeight;
+    // CSS の perspective と同じ式（盤は正面から見る一点透視）
+    const P = (x,y,z) => { const k = d/(d - z); return [pox + (x + wl - pox)*k, poy + (y + wt - poy)*k, z, k]; };
+    const M = v => v*5*em, xc = ww/2;
+    const X = mx => xc + M(mx), Z = mz => M(mz);
+    const yEye = poy - wt, yF = yEye + M(PLAN.camera.h), Y = h => yF - M(h);
+    const LIGHTS = PLAN.lamps.map(mx => ({p:[X(mx), -1.6*em, M(1.3)], col:[255,214,165], pw:1.45, R:14*em}));
+    LIGHTS.push({p:[xc, Y(12), Z(-8)], col:[200,214,232], pw:.5, R:M(14)});
+    function lightRGB(p, n){
+      let r=0,g=0,b=0;
+      for(const L of LIGHTS){
+        const lx = L.p[0]-p[0], ly = L.p[1]-p[1], lz = L.p[2]-p[2];
+        const dist = Math.hypot(lx,ly,lz) || 1;
+        const f = L.pw * Math.max(0, (n[0]*lx + n[1]*ly + n[2]*lz)/dist) / (1 + (dist/L.R)**2);
+        r += f*L.col[0]/255; g += f*L.col[1]/255; b += f*L.col[2]/255;
+      }
+      return [r,g,b];
+    }
+    return {W,H,em,ww,wh,P,d,M,X,Z,Y,xc,yF,yEye,LIGHTS,lightRGB, camX: xc};
+  }
+
+  let seed = 1;
+  const rnd = () => (seed = (seed*16807) % 2147483647) / 2147483647;
+  const DPR = () => Math.min(2, devicePixelRatio || 1);
+  const rgb = c => `rgb(${c.map(v => Math.max(0, Math.min(255, v))|0).join(",")})`;
+  const rgba = (c, a) => `rgba(${c.map(v => Math.max(0, Math.min(255, v))|0).join(",")},${a})`;
+  const mixc = (a,b,t) => a.map((v,i) => v + (b[i]-v)*t);
+  function canvasFor(id, maxDpr = 2){
+    const {W,H} = G, dpr = maxDpr < 1 ? maxDpr : Math.min(maxDpr, DPR()), cv = document.getElementById(id);
+    cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr);
+    const c = cv.getContext("2d"); c.setTransform(dpr,0,0,dpr,0,0);
+    return [cv, c, dpr];
+  }
+  const pathP = (c, pts) => { c.beginPath(); pts.forEach((p,i) => i ? c.lineTo(p[0],p[1]) : c.moveTo(p[0],p[1])); c.closePath(); };
+
+  /* ---- 空：ロンドン（北緯51.5度）の、その日・その時刻の太陽の高さから決める ---- */
+  const offsetCache = new Map();
+  function lonOffsetH(day){                       // その日のロンドンの時差（冬は0、夏時間は1）
+    if(offsetCache.has(day)) return offsetCache.get(day);
+    const t = BASEW + day*86400000 + 12*3600000, v = Math.round((lonWall(t) - t)/3600000);
+    offsetCache.set(day, v); return v;
+  }
+  function sunElev(m){
+    const day = Math.floor(m/1440), d = dayDate(day);
+    const N = Math.floor((d - Date.UTC(d.getUTCFullYear(), 0, 0))/86400000);
+    const decl = 23.44*Math.sin(2*Math.PI*(284 + N)/365) * Math.PI/180, lat = 51.5*Math.PI/180;
+    const solarH = (((m % 1440) + 1440) % 1440)/60 - lonOffsetH(day) - 0.13/15;
+    const ha = (solarH - 12)*15*Math.PI/180;
+    return Math.asin(Math.sin(lat)*Math.sin(decl) + Math.cos(lat)*Math.cos(decl)*Math.cos(ha)) * 180/Math.PI;
+  }
+  // 太陽の高さ（度）→ 空の上・下の色と明るさ
+  const SKYE = [
+    [-90,[6,8,18],[12,14,26],.07], [-12,[8,10,24],[18,20,36],.08], [-6,[26,30,62],[64,52,80],.2], [-2,[52,58,104],[170,104,92],.36],
+    [2,[92,108,160],[236,150,96],.55], [8,[124,160,206],[240,200,160],.8], [20,[146,186,228],[214,226,236],1], [90,[150,190,232],[220,230,240],1],
+  ];
+  function skyAt(m){
+    const e = sunElev(m);
+    let i = 0; while(i < SKYE.length - 2 && SKYE[i+1][0] <= e) i++;
+    const a = SKYE[i], b = SKYE[i+1], t = Math.max(0, Math.min(1, (e - a[0])/(b[0] - a[0])));
+    return {top: mixc(a[1], b[1], t), bot: mixc(a[2], b[2], t), lum: a[3] + (b[3] - a[3])*t, elev: e};
+  }
+  // 明るさと空気遠近。昼は屋根のガラスからの光、夜は電灯の暖かい光
+  let LOOK = null;
+  function makeLook(){
+    const s = skyAt(now), lum = s.lum, night = 1 - Math.min(1, lum/0.6);
+    const haze = mixc(mixc(s.bot, [118,116,112], .6), [52,44,36], night*.6);
+    const day = .5 + .5*lum;
+    const fogT = z => 1 - Math.exp(-Math.max(0, -z - G.M(25))/G.M(150));
+    const lampTint = [1 + .12*night, 1 + .03*night, 1 - .1*night];
+    const shade = (col, z, k = 1) => rgb(mixc(col.map((v,i) => v*k*day*lampTint[i] + 10*night), haze, fogT(z)));
+    LOOK = {s, lum, night, haze, day, fogT, shade};
+    return LOOK;
+  }
+
+  function drawRoom(){
+    G = geom(); makeLook();
+    paintStatic();
+    canvasFor("anim", .5); canvasFor("crowd", .55);
+    drawFront();
+    drawBoardLight(G);
+  }
+  function paintStatic(){ makeLook(); drawBack(); drawConcourse(); }
+
+  /* ---------- 奥（静止画）：ガラス屋根とトラス、ホーム、線路、車止め、ホームの先の空 ---------- */
+  let shedBucket = null;
+  const ROOF = {chord: 11, top: 14.2, bay: 6};    // トラスの下弦・上弦の高さ（m）と間隔
+  function drawBack(){
+    const {W,H,em,P,M,X,Z,Y,xc} = G, {s, shade, haze, night, lum} = LOOK;
+    const [cv, c, dpr] = canvasFor("win");
+    const Q = (pts, fill) => { pathP(c, pts.map(p => P(...p))); c.fillStyle = fill; c.fill(); };
+    const L = (a, b, col, w) => { const A = P(...a), B = P(...b); c.beginPath(); c.moveTo(A[0],A[1]); c.lineTo(B[0],B[1]); c.strokeStyle = col; c.lineWidth = w; c.stroke(); };
+    const zNear = G.d*0.55, zEnd = Z(-330), xL = X(-70), xR = X(70);
+    // 空気（屋根の下の暗がり）
+    const bg = c.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, rgb(mixc(haze, [20,20,20], .55))); bg.addColorStop(1, rgb(mixc(haze, [30,28,26], .3)));
+    c.fillStyle = bg; c.fillRect(0, 0, W, H);
+    // ホームの先に開いた空
+    {
+      const A = P(xc, Y(14), zEnd), B = P(xc, Y(-1), zEnd), gr = c.createLinearGradient(0, A[1], 0, B[1]);
+      gr.addColorStop(0, rgb(mixc(s.top, haze, .25))); gr.addColorStop(1, rgb(mixc(s.bot, haze, .15)));
+      c.fillStyle = gr; c.fillRect(0, A[1], W, B[1] - A[1]);
+    }
+    // ガラス屋根：ベイごとに明るさが少しずつ違う煤けたガラス
+    seed = 41;
+    const glass = mixc(mixc(s.top, s.bot, .3), [150,152,150], .45);
+    for(let mz = 14; mz > -330; mz -= ROOF.bay){
+      const z0 = Z(mz), z1 = Z(mz - ROOF.bay), v = .82 + rnd()*.22;
+      const A = P(xc, Y(ROOF.top), z0), B = P(xc, Y(ROOF.top), z1);
+      const gr = c.createLinearGradient(0, A[1], 0, B[1]);
+      gr.addColorStop(0, shade(glass, z0, v*(.75 + .35*lum))); gr.addColorStop(1, shade(glass, z1, v*(.95 + .3*lum)));
+      Q([[xL,Y(ROOF.top),z0],[xR,Y(ROOF.top),z0],[xR,Y(ROOF.top),z1],[xL,Y(ROOF.top),z1]], gr);
+    }
+    for(let mx = -70; mx <= 70; mx += 3.6) L([X(mx),Y(ROOF.top),Math.min(zNear, Z(14))],[X(mx),Y(ROOF.top),zEnd], "rgba(24,26,25,.35)", 1);
+    // トラス（下弦・上弦・斜材）。近いほど太く
+    for(let mz = 0; mz > -330; mz -= ROOF.bay){
+      const z = Z(mz), k = P(0,0,z)[3], col = shade([34,38,36], z), w = Math.max(.8, .11*em*k);
+      L([xL,Y(ROOF.chord),z],[xR,Y(ROOF.chord),z], col, w*1.6);
+      L([xL,Y(ROOF.top),z],[xR,Y(ROOF.top),z], col, w*1.2);
+      c.beginPath();
+      for(let mx = -70, i = 0; mx <= 70; mx += 3.2, i++){ const p = P(X(mx), Y(i % 2 ? ROOF.top : ROOF.chord), z); i ? c.lineTo(p[0],p[1]) : c.moveTo(p[0],p[1]); }
+      c.strokeStyle = rgba(mixc([34,38,36], LOOK.haze, LOOK.fogT(z)), .7); c.lineWidth = w*.45; c.stroke();
+      // 下弦に当たる光（昼は屋根から、夜は電灯から）
+      L([xL,Y(ROOF.chord) + 1,z],[xR,Y(ROOF.chord) + 1,z], rgba([210,190,150], .12 + .1*night), Math.max(.5, w*.35));
+    }
+    // 線路の床とレール（ホームより1m低い）
+    for(let z = Z(PLAN.barrierZ); z > zEnd; z -= M(20)){
+      const gr = c.createLinearGradient(0, P(xc, Y(-1), z)[1], 0, P(xc, Y(-1), z - M(20))[1]);
+      gr.addColorStop(0, shade([50,45,40], z)); gr.addColorStop(1, shade([46,42,38], z - M(20)));
+      Q([[xL,Y(-1),z],[xR,Y(-1),z],[xR,Y(-1),z-M(20)],[xL,Y(-1),z-M(20)]], gr);
+    }
+    for(const tx of Object.values(PLAN.tracks)){
+      for(let sz = PLAN.bufferZ - 1; sz > -200; sz -= .7) Q([[X(tx-1.25),Y(-.92),Z(sz)],[X(tx+1.25),Y(-.92),Z(sz)],[X(tx+1.25),Y(-.92),Z(sz-.25)],[X(tx-1.25),Y(-.92),Z(sz-.25)]], shade([60,52,44], Z(sz)));   // 枕木
+      for(const r of [-.72, .72]) L([X(tx + r), Y(-.85), Z(PLAN.bufferZ)],[X(tx + r), Y(-.85), zEnd], shade([168,162,154], Z(-60)), 1.2);
+    }
+    // 島式ホーム：上面（手前が明るい）、縁石の白線、カメラから見える側の側面
+    for(const isl of PLAN.islands){
+      const x0 = X(isl.x0), x1 = X(isl.x1), edge = (isl.x0 + isl.x1)/2 > 0 ? x0 : x1;
+      for(let z = Z(PLAN.barrierZ); z > zEnd; z -= M(12)){
+        Q([[x0,Y(0),z],[x1,Y(0),z],[x1,Y(0),z-M(12)],[x0,Y(0),z-M(12)]], shade([126,120,110], z));
+        Q([[edge,Y(0),z],[edge,Y(-1),z],[edge,Y(-1),z-M(12)],[edge,Y(0),z-M(12)]], shade([76,70,62], z));
+        for(const ex of [isl.x0 + .3, isl.x1 - .4]) Q([[X(ex),Y(0),z],[X(ex+.1),Y(0),z],[X(ex+.1),Y(0),z-M(12)],[X(ex),Y(0),z-M(12)]], shade([220,214,200], z));
+      }
+    }
+    // 車止め（頭端式なので、線路はここで終わる）：赤い緩衝梁と白い緩衝器
+    for(const tx of Object.values(PLAN.tracks)){
+      const z = Z(PLAN.bufferZ);
+      Q([[X(tx-1.4),Y(.25),z],[X(tx+1.4),Y(.25),z],[X(tx+1.4),Y(-.7),z],[X(tx-1.4),Y(-.7),z]], shade([158,44,32], z));
+      Q([[X(tx-1.4),Y(.25),z],[X(tx+1.4),Y(.25),z],[X(tx+1.4),Y(.25),z-M(.4)],[X(tx-1.4),Y(.25),z-M(.4)]], shade([190,70,52], z));
+      for(const bx of [-1.0, .6]) Q([[X(tx+bx),Y(.0),z+2],[X(tx+bx+.4),Y(.0),z+2],[X(tx+bx+.4),Y(-.45),z+2],[X(tx+bx),Y(-.45),z+2]], shade([214,204,184], z));
+    }
+    // ホームの吊り下げ灯（夜ほど明るい）
+    for(const isl of PLAN.islands) for(let mz = PLAN.barrierZ - 5; mz > -300; mz -= 12){
+      const p = P(X((isl.x0 + isl.x1)/2), Y(5.2), Z(mz)), r = Math.max(1, M(.25)*p[3]);
+      const g = c.createRadialGradient(p[0], p[1], 0, p[0], p[1], r*7);
+      g.addColorStop(0, `rgba(255,222,170,${.18 + .5*night})`); g.addColorStop(1, "rgba(255,210,150,0)");
+      c.fillStyle = g; c.fillRect(p[0]-r*7, p[1]-r*7, r*14, r*14);
+      c.fillStyle = rgba(mixc([255,238,206], haze, LOOK.fogT(Z(mz))*.6), .9); c.beginPath(); c.arc(p[0], p[1], r, 0, Math.PI*2); c.fill();
+    }
+    // 屋根から差す光のもや（昼）／電灯のもや（夜）
+    {
+      const top = P(xc, Y(ROOF.chord), Z(-40))[1], bot = P(xc, Y(0), Z(-40))[1];
+      const g = c.createLinearGradient(0, top, 0, bot);
+      g.addColorStop(0, rgba(mixc(s.bot, [255,230,190], night), .10 + .06*lum)); g.addColorStop(1, rgba(mixc(s.bot, [255,230,190], night), 0));
+      c.fillStyle = g; c.fillRect(0, top, W, bot - top);
+    }
+    const tmp = document.createElement("canvas"); tmp.width = cv.width; tmp.height = cv.height;
+    tmp.getContext("2d").drawImage(cv, 0, 0);
+    c.setTransform(1,0,0,1,0,0); c.clearRect(0,0,cv.width,cv.height);
+    c.filter = `blur(${(.9*dpr).toFixed(1)}px)`; c.drawImage(tmp, 0, 0); c.filter = "none";
+  }
+
+  /* ---------- 手前（静止画）：盤を吊る梁と鎖、改札の柱と大梁・番線の札、柵と改札口、床、地下鉄の入口、案内板 ---------- */
+  function drawConcourse(){
+    const {W,H,em,ww,wh,P,M,X,Z,Y,xc,camX} = G, {s, shade, night} = LOOK;
+    const [cv, c] = canvasFor("room");
+    const Q = (pts, fill) => { pathP(c, pts.map(p => P(...p))); c.fillStyle = fill; c.fill(); };
+    const L = (a, b, col, w) => { const A = P(...a), B = P(...b); c.beginPath(); c.moveTo(A[0],A[1]); c.lineTo(B[0],B[1]); c.strokeStyle = col; c.lineWidth = w; c.stroke(); };
+    // 縦の面に、上が明るく下が暗いグラデーション（屋根からの光）
+    const vgrad = (x0, x1, h0, h1, z, col, k0 = 1.1, k1 = .7) => {
+      const A = P(x0, Y(h1), z), B = P(x0, Y(h0), z), g = c.createLinearGradient(0, A[1], 0, B[1]);
+      g.addColorStop(0, shade(col, z, k0)); g.addColorStop(1, shade(col, z, k1));
+      Q([[x0,Y(h1),z],[x1,Y(h1),z],[x1,Y(h0),z],[x0,Y(h0),z]], g);
+    };
+    const zB = Z(PLAN.barrierZ), xL = X(-70), xR = X(70), zNear = G.d*0.6;
+    // 床（大きな敷石、手前ほど暗く、灯りの下は明るい）
+    {
+      const A = P(xc, Y(0), zB), B = P(xc, Y(0), zNear);
+      const fg = c.createLinearGradient(0, A[1], 0, Math.min(H*2, B[1]));
+      fg.addColorStop(0, shade([122,116,106], zB)); fg.addColorStop(1, shade([70,66,60], 0, .9));
+      Q([[xL,Y(0),zB],[xR,Y(0),zB],[xR,Y(0),zNear],[xL,Y(0),zNear]], fg);
+      seed = 9;
+      for(let mx = -60; mx < 60; mx += 1.5) for(let mz = PLAN.barrierZ; mz < 10; mz += 1.5){
+        const v = rnd(); if(v > .3) continue;
+        Q([[X(mx),Y(0),Z(mz)],[X(mx+1.5),Y(0),Z(mz)],[X(mx+1.5),Y(0),Z(mz+1.5)],[X(mx),Y(0),Z(mz+1.5)]], `rgba(${v < .15 ? "0,0,0" : "255,250,240"},${.03 + v*.08})`);
+      }
+      for(let mx = -60; mx <= 60; mx += 1.5) L([X(mx),Y(0),zB],[X(mx),Y(0),zNear], "rgba(30,26,22,.3)", 1);
+      for(let mz = PLAN.barrierZ; mz < 20; mz += 1.5) L([xL,Y(0),Z(mz)],[xR,Y(0),Z(mz)], "rgba(30,26,22,.3)", 1);
+      for(const Lp of G.LIGHTS.slice(0,2)){
+        const p = P(Lp.p[0], Y(0), Z(-8)), r = M(9)*p[3];
+        const lg = c.createRadialGradient(p[0], p[1], 0, p[0], p[1], r);
+        lg.addColorStop(0, `rgba(255,214,160,${.09 + .14*night})`); lg.addColorStop(1, "rgba(255,214,160,0)");
+        c.save(); c.transform(1,0,0,.3,0,p[1]*.7); c.fillStyle = lg; c.fillRect(p[0]-r, p[1]-r, r*2, r*2); c.restore();
+      }
+    }
+    // 地下鉄の入口：石の手すり壁で囲んだ階段。段が下へ続き、奥ほど暗い
+    {
+      const st = PLAN.stairs, x0 = X(st.x0), x1 = X(st.x1), zN = Z(st.z1), zS = Z(st.z0), steps = 14;
+      for(let i = steps - 1; i >= 0; i--){
+        const za = zN + (zS - zN)*i/steps, zb = zN + (zS - zN)*(i+1)/steps, h = -i*.24, dark = Math.max(.12, 1 - i/steps*1.1);
+        Q([[x0,Y(h),za],[x1,Y(h),za],[x1,Y(h - .24),za],[x0,Y(h - .24),za]], shade([96,90,80], za, .55*dark));          // 蹴上げ
+        Q([[x0,Y(h),za],[x1,Y(h),za],[x1,Y(h),zb],[x0,Y(h),zb]], shade([140,132,118], za, .8*dark));                   // 踏み面
+      }
+      Q([[x0,Y(-steps*.24),zS],[x1,Y(-steps*.24),zS],[x1,Y(0),zS],[x0,Y(0),zS]], "#100e0c");
+      // 手すり壁（高さ1m・厚さ0.3m）：上面・外側・内側
+      const wallC = [168,158,138], tH = 1.0, th = .3;
+      const box = (ax0, ax1, az0, az1) => {
+        const X0 = X(ax0), X1 = X(ax1), Z0 = Z(az0), Z1 = Z(az1);
+        if(Z1 > Z0) Q([[X0,Y(tH),Z1],[X1,Y(tH),Z1],[X1,Y(0),Z1],[X0,Y(0),Z1]], shade(wallC, Z1, .85));                // 北の面
+        const side = (ax0 + ax1)/2 > 0 ? X0 : X1;                                                                     // カメラから見える側面
+        Q([[side,Y(tH),Z0],[side,Y(tH),Z1],[side,Y(0),Z1],[side,Y(0),Z0]], shade(wallC, Z0, .62));
+        Q([[X0,Y(tH),Z0],[X1,Y(tH),Z0],[X1,Y(tH),Z1],[X0,Y(tH),Z1]], shade(wallC, Z0, 1.15));                      // 笠石
+      };
+      box(st.x0 - th, st.x0, st.z0, st.z1); box(st.x1, st.x1 + th, st.z0, st.z1); box(st.x0 - th, st.x1 + th, st.z0 - th, st.z0);
+      // 入口の灯柱と看板（ロンドン地下鉄の商標の丸いマークは使わず、当時風の文字看板にする）
+      const px = st.x0 - .5, pz = st.z1 + .3;
+      L([X(px),Y(0),Z(pz)],[X(px),Y(3.6),Z(pz)], shade([30,34,32], Z(pz)), Math.max(1.5, .09*em*P(0,0,Z(pz))[3]));
+      const gp = P(X(px), Y(3.75), Z(pz)), gr = Math.max(2, M(.22)*gp[3]);
+      const gg = c.createRadialGradient(gp[0], gp[1], 0, gp[0], gp[1], gr*4); gg.addColorStop(0, `rgba(255,238,200,${.5 + .4*night})`); gg.addColorStop(1, "rgba(255,230,190,0)");
+      c.fillStyle = gg; c.fillRect(gp[0]-gr*4, gp[1]-gr*4, gr*8, gr*8);
+      c.fillStyle = "#fff4dc"; c.beginPath(); c.arc(gp[0], gp[1], gr, 0, Math.PI*2); c.fill();
+      enamel(c, X(px + .15), X(px + 3.6), Y(3.1), Y(2.5), Z(pz), LANG === "ja" ? "地下鉄" : "UNDERGROUND", [30,50,104]);
+      enamel(c, X(px + .15), X(px + 3.6), Y(2.42), Y(2.08), Z(pz), LANG === "ja" ? "ディストリクト線・サークル線" : "DISTRICT & CIRCLE LINES", [30,50,104], .55);
+    }
+    // 改札：島式ホームの中央に柱。柱の両脇が改札口、ほかは鉄柵。改札口の脇に改札係の小屋
+    {
+      const col = shade([30,38,32], zB);
+      const gates = PLAN.islands.map(i => (i.x0 + i.x1)/2);
+      const isGap = mx => gates.some(g => Math.abs(mx - g) > .35 && Math.abs(mx - g) < 1.7);
+      for(let mx = -70; mx <= 70; mx += .2) if(!isGap(mx)) L([X(mx),Y(0),zB],[X(mx),Y(1.1),zB], col, Math.max(.8, .035*em));
+      const opens = gates.flatMap(g => [[g - 1.7, g - .35], [g + .35, g + 1.7]]).sort((p, q) => p[0] - q[0]);
+      for(const h of [1.1, .15]){
+        let a = -70;
+        for(const [o0, o1] of [...opens, [70, 70]]){ if(o0 > a) L([X(a),Y(h),zB],[X(o0),Y(h),zB], col, h > 1 ? 2.2 : 1.4); a = o1; }
+      }
+      // 改札係の小屋（木造。屋根・窓・中の係員）
+      for(const g of gates) for(const sgn of [1]){
+        const bx0 = g + sgn*1.8, bx1 = bx0 + 1.3, bz0 = PLAN.barrierZ, bz1 = PLAN.barrierZ + 1.1;
+        const X0 = X(bx0), X1 = X(bx1), Z0 = Z(bz0), Z1 = Z(bz1);
+        const side = (bx0 + bx1)/2 > 0 ? X0 : X1;
+        Q([[side,Y(2.3),Z0],[side,Y(2.3),Z1],[side,Y(0),Z1],[side,Y(0),Z0]], shade([70,52,34], Z0, .7));
+        vgrad(X0, X1, 0, 2.3, Z1, [96,72,46], 1.05, .75);
+        for(let i=1;i<5;i++) L([X0 + (X1 - X0)*i/5, Y(1.0), Z1 + 1],[X0 + (X1 - X0)*i/5, Y(0), Z1 + 1], "rgba(40,28,16,.4)", 1);
+        Q([[X0 + M(.15),Y(2.05),Z1+1],[X1 - M(.15),Y(2.05),Z1+1],[X1 - M(.15),Y(1.25),Z1+1],[X0 + M(.15),Y(1.25),Z1+1]], shade([226,206,150], Z1, .85 + night*.5));
+        const hp = P((X0 + X1)/2, Y(1.55), Z1 + 2), hr = M(.14)*hp[3];                                                // 係員の頭と制帽
+        c.fillStyle = "rgba(30,24,18,.85)"; c.beginPath(); c.arc(hp[0], hp[1], hr, 0, Math.PI*2); c.fill();
+        c.fillRect(hp[0] - hr*1.3, hp[1] - hr*1.25, hr*2.6, hr*.45);
+        c.beginPath(); c.ellipse(hp[0], hp[1] + hr*2.3, hr*1.6, hr*1.4, 0, Math.PI, 0); c.fill();
+        Q([[X0 - M(.12),Y(2.45),Z1 + M(.15)],[X1 + M(.12),Y(2.45),Z1 + M(.15)],[X1 + M(.12),Y(2.3),Z1 + M(.15)],[X0 - M(.12),Y(2.3),Z1 + M(.15)]], shade([46,34,22], Z1));
+        Q([[X0 - M(.12),Y(2.45),Z1 + M(.15)],[X1 + M(.12),Y(2.45),Z1 + M(.15)],[X1 + M(.12),Y(2.45),Z0],[X0 - M(.12),Y(2.45),Z0]], shade([66,50,34], Z1, 1.1));
+      }
+      // 柱（島式ホームの中心線。奥のホームの柱と同じ列）。床から屋根のトラスまで
+      for(const g of gates){
+        const x0 = X(g - .22), x1 = X(g + .22);
+        const A = P(x0, Y(ROOF.chord), zB), B = P(x0, Y(0), zB), gr2 = c.createLinearGradient(A[0], 0, P(x1, 0, zB)[0], 0);
+        gr2.addColorStop(0, shade([60,76,64], zB)); gr2.addColorStop(.4, shade([40,52,44], zB)); gr2.addColorStop(1, shade([22,28,24], zB));
+        Q([[x0,Y(ROOF.chord),zB],[x1,Y(ROOF.chord),zB],[x1,Y(0),zB],[x0,Y(0),zB]], gr2);
+        Q([[X(g - .4),Y(.7),zB+2],[X(g + .4),Y(.7),zB+2],[X(g + .4),Y(0),zB+2],[X(g - .4),Y(0),zB+2]], shade([34,44,38], zB));            // 柱の台座
+        // 柱頭の飾り（トラスへ広がる腕）
+        for(const sgn of [-1, 1]){ const a = P(X(g + sgn*.2), Y(ROOF.chord - 1.6), zB), m = P(X(g + sgn*.4), Y(ROOF.chord - .3), zB), b = P(X(g + sgn*2.2), Y(ROOF.chord), zB);
+          c.beginPath(); c.moveTo(a[0],a[1]); c.quadraticCurveTo(m[0], m[1], b[0], b[1]); c.strokeStyle = shade([34,44,38], zB); c.lineWidth = Math.max(1, .12*em*a[3]); c.stroke(); }
+      }
+      // 改札の上の大梁（格子）と、そこから吊る番線の札
+      const gTop = 5.4, gBot = 4.7;
+      vgrad(xL, xR, gBot, gTop, zB - 1, [40,56,46], 1.1, .8);
+      c.beginPath();
+      for(let mx = -70, i = 0; mx <= 70; mx += .8, i++){ const p = P(X(mx), Y(i % 2 ? gTop : gBot), zB); i ? c.lineTo(p[0],p[1]) : c.moveTo(p[0],p[1]); }
+      c.strokeStyle = shade([24,32,28], zB); c.lineWidth = 1.2; c.stroke();
+      L([xL,Y(gTop),zB],[xR,Y(gTop),zB], shade([24,32,28], zB), 2); L([xL,Y(gBot),zB],[xR,Y(gBot),zB], shade([24,32,28], zB), 2);
+      for(const isl of PLAN.islands){
+        const g = (isl.x0 + isl.x1)/2;
+        isl.plats.forEach((p, i) => {
+          const cx = g + (i ? 1.0 : -1.0), w = 1.6, h1 = gBot - .35, h0 = h1 - 1.05;
+          for(const dx of [-w/2 + .15, w/2 - .15]) L([X(cx + dx),Y(gBot),zB+2],[X(cx + dx),Y(h1),zB+2], shade([24,26,24], zB), 1);
+          enamel(c, X(cx - w/2), X(cx + w/2), Y(h1), Y(h0), zB + 3, String(p), [236,230,212], .78, "#16181a");
+        });
+      }
+    }
+    // 吊り下げの案内板：左（東）の1〜8番線
+    {
+      const sx = X(-11), sz = Z(-13), w = 4.6, h0 = 6.2, h1 = 7.0;
+      for(const dx of [-w/2 + .3, w/2 - .3]) L([sx + M(dx), Y(h1), sz],[sx + M(dx), Y(ROOF.chord), sz], "#1b1c1c", 1.2);
+      enamel(c, sx - M(w/2), sx + M(w/2), Y(h1), Y(h0), sz, L10().leftSign, [31,74,53]);
+    }
+    // 発車標を吊る梁（両面式の盤）と鎖
+    {
+      const beamH = PLAN.boardBottom + G.wh/(5*em) + 1.1, z = -1;
+      vgrad(xL, xR, beamH - .45, beamH, z, [44,58,50], 1.15, .8);
+      L([xL,Y(beamH - .45),z],[xR,Y(beamH - .45),z], "#151a17", 1.5);
+      for(const fx of [.1, .5, .9]){
+        const x = ww*fx, A = P(x, Y(beamH - .45), z), B = P(x, 0, z), n = Math.max(4, Math.round(Math.abs(B[1] - A[1])/(M(.12))));
+        c.strokeStyle = "#1a1a19"; c.lineWidth = Math.max(1.2, .06*em);
+        for(let i=0;i<n;i++){ const y0 = A[1] + (B[1] - A[1])*i/n, y1 = A[1] + (B[1] - A[1])*(i+1)/n; c.beginPath(); c.ellipse(A[0], (y0 + y1)/2, i % 2 ? .6 : M(.05), (y1 - y0)*.62, 0, 0, Math.PI*2); c.stroke(); }
+      }
+    }
+  }
+  // 琺瑯の看板
+  function enamel(c, x0, x1, y0, y1, z, text, bg, scale = 1, ink = "#ece3ca"){
+    const {P} = G;
+    const p00 = P(x0, y0, z), p10 = P(x1, y0, z), p01 = P(x0, y1, z);
+    const w = x1 - x0, h = y1 - y0;
+    c.save();
+    c.transform((p10[0]-p00[0])/w, (p10[1]-p00[1])/w, (p01[0]-p00[0])/h, (p01[1]-p00[1])/h, p00[0], p00[1]);
+    const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, LOOK.shade(bg, z, 1.15)); g.addColorStop(1, LOOK.shade(bg, z, .9));
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+    c.strokeStyle = ink; c.lineWidth = h*.05; c.strokeRect(h*.09, h*.09, w - h*.18, h - h*.18);
+    c.strokeStyle = "rgba(0,0,0,.35)"; c.lineWidth = h*.04; c.strokeRect(0, 0, w, h);
+    c.fillStyle = ink; c.textAlign = "center"; c.textBaseline = "middle";
+    c.font = LANG === "ja" ? `900 ${h*.5*scale}px "Zen Kaku Gothic New","Noto Sans JP",sans-serif` : `700 ${h*.62*scale}px "Barlow Condensed","Arial Narrow",sans-serif`;
+    c.fillText(text, w/2, h*.55, w - h*.4);
+    c.restore();
+  }
+
+  /* ---- 人のシルエット（床に立つ、カメラ向きの板）。身長 1.7m ＝ 18 単位 ---- */
+  const PS = 1.7*5/18;
+  function person(c, x, z, o, fill, sink = 0){
+    const {P, yF, em} = G;
+    const F = P(x, yF + sink, z), k = F[3], u = em*k*(o.h || 1)*PS;
+    const walking = o.ph != null, s = walking ? Math.sin(o.ph) : 0;
+    const bob = walking ? Math.abs(Math.cos(o.ph))*.25 : 0;
+    const X = v => F[0] + v*u, Yy = v => F[1] - (v + bob)*u, side = o.side || 0;
+    // 足もとの影（屋根からの光は真上から、柔らかく）
+    if(!sink){ c.fillStyle = "rgba(0,0,0,.22)"; c.beginPath(); c.ellipse(F[0], F[1], 2.6*u, .55*u, 0, 0, Math.PI*2); c.fill(); }
+    c.beginPath();
+    const sw = (o.w || 2.2) * (side ? .62 : 1), hem = (o.skirt ? 2.5 : 2.3) * (side ? .72 : 1), hemY = o.skirt ? 6.5 : 6;
+    if(side){
+      for(const g of [s, -s]){ const fx = g*1.7; c.moveTo(X(-.42), Yy(7.6)); c.lineTo(X(.42), Yy(7.6)); c.lineTo(X(fx + .55*side), Yy(-bob)); c.lineTo(X(fx - .45), Yy(-bob)); c.closePath(); }
+    } else {
+      const l1 = walking ? Math.max(0, s)*.7 : 0, l2 = walking ? Math.max(0, -s)*.7 : 0;
+      c.rect(X(-.95), Yy(7.6), .8*u, (7.6 - l1 + bob)*u); c.rect(X(.15), Yy(7.6), .8*u, (7.6 - l2 + bob)*u);
+    }
+    const lean = side*.25;
+    c.moveTo(X(-hem), Yy(hemY)); c.lineTo(X(-sw + lean), Yy(13.6));
+    c.quadraticCurveTo(X(-sw + lean), Yy(14.5), X(-1 + lean), Yy(14.6)); c.lineTo(X(1 + lean), Yy(14.6));
+    c.quadraticCurveTo(X(sw + lean), Yy(14.5), X(sw + lean), Yy(13.6)); c.lineTo(X(hem), Yy(hemY)); c.closePath();
+    c.rect(X(-.42 + lean), Yy(15.3), .84*u, 1*u);
+    const hx = lean*1.3;
+    c.moveTo(X(hx + 1.02), Yy(16.3)); c.ellipse(X(hx), Yy(16.3), (side ? .95 : 1.02)*u, 1.25*u, 0, 0, Math.PI*2);
+    if(o.hat){ c.moveTo(X(hx - 1.75), Yy(17.1)); c.ellipse(X(hx), Yy(17.15), 1.75*u, .32*u, 0, 0, Math.PI*2); c.rect(X(hx - 1.05), Yy(18.2), 2.1*u, 1.1*u); }
+    if(o.bag){
+      const bx = side ? (o.bag > 0 ? .6 : -2.9) : o.bag*2.9 - (o.bag < 0 ? 2.4 : 0);
+      const sway = walking ? Math.sin(o.ph*2)*.12 : 0;
+      c.rect(X(bx + sway), Yy(5.4), 2.4*u, 2.6*u);
+    }
+    c.fillStyle = fill; c.fill();
+  }
+
+  /* ---------- 手前：発車標を照らす吊り下げ灯（盤の梁から吊る） ---------- */
+  function drawFront(){
+    const {em,P,LIGHTS,Y,wh,M} = G;
+    const [cv, c] = canvasFor("front");
+    const beamY = Y(PLAN.boardBottom + wh/(5*em) + 1.1 - .45);
+    for(const L of LIGHTS.slice(0,2)){
+      const [lx, ly, lz] = L.p;
+      const top = P(lx, beamY, lz), apex = P(lx, ly - 2.6*em, lz);
+      c.beginPath(); c.moveTo(top[0], top[1]); c.lineTo(apex[0], apex[1]); c.strokeStyle = "#1a1a19"; c.lineWidth = Math.max(1.5, .1*em*apex[3]); c.stroke();
+      const ring = (y, r) => { const pts = []; for(let i=0;i<32;i++){ const a = i/32*Math.PI*2; pts.push(P(lx + Math.cos(a)*r, y, lz + Math.sin(a)*r)); } return pts; };
+      const up = ring(ly - 2.4*em, .45*em), rim = ring(ly + .2*em, 2.3*em);
+      for(let i=0;i<32;i++){ const j = (i+1)%32, sh = .6 + .4*Math.cos(i/32*Math.PI*2 - 2.2); c.fillStyle = rgb([29*sh*1.4, 45*sh*1.4, 36*sh*1.4]); pathP(c, [up[i], up[j], rim[j], rim[i]]); c.fill(); }
+      pathP(c, rim);
+      const cx = rim.reduce((s,p) => s+p[0], 0)/32, cy = rim.reduce((s,p) => s+p[1], 0)/32;
+      const rr = Math.max(...rim.map(p => Math.abs(p[0]-cx)));
+      const ig = c.createRadialGradient(cx, cy, 0, cx, cy, rr);
+      ig.addColorStop(0, "#fffaf0"); ig.addColorStop(.25, "#ffe7bd"); ig.addColorStop(.8, "#d9c7a4"); ig.addColorStop(1, "#8f8064");
+      c.fillStyle = ig; c.fill();
+      c.save(); c.globalCompositeOperation = "lighter";
+      const bl = c.createRadialGradient(cx, cy, 0, cx, cy, rr*3.2);
+      bl.addColorStop(0, "rgba(255,225,170,.3)"); bl.addColorStop(.4, "rgba(255,200,140,.07)"); bl.addColorStop(1, "rgba(255,190,130,0)");
+      c.fillStyle = bl; c.fillRect(cx - rr*3.2, cy - rr*3.2, rr*6.4, rr*6.4);
+      c.restore();
+    }
+  }
+
+  /* =========================================================
+     動くもの：電車の発着・人の流れ・音（すべて配置図の上で動かす）
+     ・電車：見えている 12〜17 番線に、時刻表どおりの列車が入る。奥から入って車止めの前で止まり、
+       折り返して奥へ出ていく。入ってくる時は先頭の白い標識灯、止まってからは最後尾の赤い尾灯
+     ・乗る人：駅前の入口（手前）・地下鉄の階段・東の1〜8番線側から来て、盤に出ている列車を1本選ぶ。
+       改札が始まっていなければ盤の下で見上げて待ち、「BOARDING」で自分の番線の改札口へ向かい、
+       島式ホームの自分の側の縁に沿って歩き、電車が止まっていれば乗る
+     ・降りる人：列車が着いた時刻に、その番線のドアから改札口を通って、入口・地下鉄・東側へ
+     ・1〜8番線の列車の客は、東の端（左）から出入りする
+     ========================================================= */
+  const VIS = Object.keys(PLAN.tracks).map(Number);
+  const MOVE = 1.6;                                    // 入線・発車にかかる分
+  const dwellOf = p => p === 15 ? 22 : 14;            // 発車の何分前に入線するか
+  const weekday = day => dayDate(day).getUTCDay();
+  function crowdLevel(m){
+    const day = Math.floor(m/1440), h = (((m % 1440) + 1440) % 1440)/60;
+    const wd = weekday(day), weekend = wd === 0 || wd === 6;
+    if(h >= 0.7 && h < 4.9) return 0;
+    const bump = (c, w) => Math.exp(-(((h - c)/w)**2));
+    let v = 0.1 + 0.3*bump(13, 3.2) + 0.15*bump(20.5, 1.5);
+    v += (weekend ? .22 : 1) * bump(8.4, 0.95);
+    v += (weekend ? .3 : 1) * bump(17.6, 1.05);
+    if(weekend) v += .25*bump(11, 2.5);
+    if(h < 6) v *= (h - 4.9)/1.1;
+    if(h >= 23 || h < .7) v *= .45;
+    return Math.max(0, Math.min(1, v));
+  }
+  function toPlatformShare(m){
+    const h = (((m % 1440) + 1440) % 1440)/60;
+    const bump = (c, w) => Math.exp(-(((h - c)/w)**2));
+    return 0.5 - 0.38*bump(8.4, 1.2) + 0.38*bump(17.6, 1.3) + 0.15*bump(22, 1.5);
+  }
+  // いま各番線にいる電車
+  function trainsNow(at = now){
+    const res = {}, today = Math.floor(at/1440);
+    for(const day of [today-1, today, today+1]){
+      const pl = plan(day);
+      TIMETABLE.forEach((t,i) => {
+        if(!(t.plat in PLAN.tracks) || pl[i].cancelled) return;
+        const abs = day*1440 + t.time, dep = abs + pl[i].delay, arr = abs - dwellOf(t.plat);
+        if(at >= arr - MOVE && at <= dep + MOVE){ const cur = res[t.plat]; if(!cur || arr > cur.arr) res[t.plat] = {t, abs, arr, dep}; }
+      });
+    }
+    const D = G.M(330);
+    for(const p in res){
+      const f = res[p];
+      if(at < f.arr){ f.prog = (at - (f.arr - MOVE))/MOVE; f.off = D*(1 - f.prog)**2; f.phase = "in"; }
+      else if(at <= f.dep){ f.off = 0; f.phase = "dwell"; }
+      else { const q = (at - f.dep)/MOVE; f.off = D*q*q; f.phase = "out"; }
+      f.key = p + ":" + f.abs; f.plat = +p;
+    }
+    return res;
+  }
+
+  let luggage = 0;
+  const outfit = () => {
+    const skirt = Math.random() < .38;
+    return {skirt, hat: !skirt && Math.random() < .55, w: skirt ? 1.95 + Math.random()*.2 : 2.1 + Math.random()*.35,
+      h: .93 + Math.random()*.12, bag: Math.random() < .28 + luggage ? (Math.random() < .5 ? -1 : 1) : 0, tone: Math.random()};
+  };
+  const people = [];   // {x, z（ワールド）, path:[[x,z],…], kind, …}
+  let UP = [], TR = {};
+  const mX = mx => G.X(mx), mZ = mz => G.Z(mz), R = (a, b) => a + Math.random()*(b - a);
+
+  // 出入口（配置図の場所）
+  const ENTRANCE = () => [mX(R(-9, 9)), mZ(R(4, 7))];   // 入口から入って画面の手前に現れる位置
+  const STAIRS_IN = () => [mX(R(PLAN.stairs.x0 + .6, PLAN.stairs.x1 - .6)), mZ(PLAN.stairs.z0)];
+  const STAIRS_TOP = () => [mX(R(PLAN.stairs.x0 + .6, PLAN.stairs.x1 - .6)), mZ(PLAN.stairs.z1 + .4)];
+  const EAST = () => [mX(PLAN.eastX - 4), mZ(R(-19, -14))];
+  // 改札口は島式ホームの中央の柱の両脇。ホームの左の面へは左の口、右の面へは右の口
+  const gatePts = p => { const i = islandOf(p), gx = (i.x0 + i.x1)/2 + (i.plats[0] === p ? -1 : 1)*R(.7, 1.35); return [[mX(gx), mZ(PLAN.barrierZ + 1.5)], [mX(gx), mZ(PLAN.barrierZ - 1.5)]]; };
+  const doorSpot = p => { const f = faceOf(p); return [mX(f.x + f.inward*R(.7, 2.4)), mZ(R(PLAN.stopZ - 4, PLAN.stopZ - 110))]; };
+  const mid = (a, b) => [(a[0] + b[0])/2 + mX(R(-3, 3)) - mX(0), (a[1] + b[1])/2 + mZ(R(-2, 2))];
+
+  function pickTrain(minA, maxA){
+    const c = UP.filter(e => !e.cancelled && e.abs + e.delay - now > minA && e.abs + e.delay - now < maxA);
+    return c.length ? c[Math.floor(Math.random()*c.length)] : null;
+  }
+  function addWalker(from, path, kind, extra = {}){
+    const p = {x: from[0], z: from[1], path, kind, o: outfit(), ph: Math.random()*6, spd: G.M(R(1.15, 1.6)), delay: 0, ...extra};
+    people.push(p); return p;
+  }
+  function routeToTrain(p, plat){
+    const here = [p.x, p.z];
+    if(plat in PLAN.tracks){
+      const [g1, g2] = gatePts(plat), spot = doorSpot(plat);
+      p.path = [mid(here, g1), g1, g2, [spot[0], g2[1] - mZ(0) + mZ(-3)], spot]; p.kind = "toTrain"; p.plat = plat;
+    } else { const e = EAST(); p.path = [mid(here, e), e]; p.kind = "gone"; }
+  }
+  function spawnDeparting(){
+    const r = Math.random(), from = r < .55 ? ENTRANCE() : r < .85 ? STAIRS_IN() : EAST();
+    const tr = pickTrain(1.5, 40), plat = tr ? tr.t.plat : 13;
+    const p = addWalker(from, [], "x", {rise: r >= .55 && r < .85});
+    if(p.rise) p.path = [STAIRS_TOP()];
+    const watching = people.filter(q => q.kind === "watch").length;
+    if(tr && tr.abs + tr.delay - now > 10 && watching < 14 && Math.random() < .35){
+      const spot = [mX(R(-9, 9)), mZ(R(-16, -6))];         // 両面式の盤の向こう側で、盤を見上げて待つ（奥行きもばらばら）
+      p.path.push(spot); p.kind = "watchGo"; p.train = tr; return;
+    }
+    if(p.rise){ p.after = plat; p.kind = "riseThen"; } else routeToTrain(p, plat);
+  }
+  // 降りた人の行き先：入口（駅前の通り）・地下鉄・東側
+  function exitRoute(p){
+    const r = Math.random(), here = [p.x, p.z];
+    if(r < .55){ const e = ENTRANCE(); p.path = [mid(here, e), e]; p.kind = "gone"; }
+    else if(r < .88){ const t = STAIRS_TOP(); p.path = [mid(here, t), t, [t[0], mZ(PLAN.stairs.z0)]]; p.kind = "gone"; p.descend = true; }
+    else { const e = EAST(); p.path = [mid(here, e), e]; p.kind = "gone"; }
+  }
+  function arrivalBurst(t, lvl, share){
+    const n = Math.round((3 + 26*lvl*(1 - share)) * (t.name ? 1.4 : 1) * (t.svc === "STOPPING" ? .7 : 1));
+    for(let i=0;i<n;i++){
+      const delay = R(4, 110);
+      if(t.plat in PLAN.tracks){
+        const spot = doorSpot(t.plat), [g1, g2] = gatePts(t.plat);
+        addWalker(spot, [[spot[0], mZ(PLAN.barrierZ - 3)], g2, g1], "alighted", {delay});
+      } else {
+        const e = EAST(); const p = addWalker(e, [], "x", {delay}); exitRoute(p);
+      }
+    }
+  }
+
+  let lastEvt = null, animNow = null;
+  function simPeople(sdt){
+    const lvl = crowdLevel(now), share = toPlatformShare(now);
+    luggage = 0;
+    for(const e of UP) if(e.t.name && e.abs - now > 0 && e.abs - now < 30) luggage = .45;
+    // 到着：見えている番線は入線の時刻、それ以外は発車の15分前
+    if(lastEvt != null && now > lastEvt){
+      const today = Math.floor(now/1440);
+      for(const day of [today-1, today]){
+        const pl = plan(day);
+        TIMETABLE.forEach((t,i) => {
+          if(pl[i].cancelled) return;
+          const arr = day*1440 + t.time - (t.plat in PLAN.tracks ? dwellOf(t.plat) : 15);
+          if(arr > lastEvt && arr <= now) arrivalBurst(t, lvl, share);
+        });
+      }
+    }
+    lastEvt = now;
+    // 乗りに来る人
+    const nC = people.length;
+    let ex = sdt * (.03 + .9*lvl) * share, k = 0;
+    while(ex > 0 && k < 6 && nC + k < 90){ if(Math.random() < ex){ spawnDeparting(); k++; } ex -= 1; }
+
+    for(let i = people.length - 1; i >= 0; i--){
+      const p = people[i];
+      if(p.delay > 0){ p.delay -= sdt; continue; }
+      if(p.kind === "watch"){                              // 盤を見上げて待つ
+        p.walking = false;
+        if(p.train.abs + p.train.delay - now <= 10 || p.train.cancelled) routeToTrain(p, p.train.t.plat);
+        continue;
+      }
+      if(p.kind === "wait"){                               // ホームで電車を待つ
+        p.walking = false;
+        const tr = TR[p.plat];
+        if(tr && tr.phase === "dwell" && !p.missed){ p.board = (p.board || 0) + sdt; if(p.board > R(2, 8)) people.splice(i,1); continue; }
+        if(tr && tr.phase === "out") p.missed = true;
+        if(!tr) p.missed = false;
+        const next = UP.find(e => e.t.plat === p.plat && !e.cancelled && e.abs + e.delay > now);
+        if(!next || next.abs - now > 70){ const [g1, g2] = gatePts(p.plat); p.path = [[p.x, mZ(PLAN.barrierZ - 3)], g2, g1]; p.kind = "alighted"; }
+        continue;
+      }
+      if(!p.path.length){
+        switch(p.kind){
+          case "watchGo": p.kind = "watch"; break;
+          case "riseThen": routeToTrain(p, p.after); break;
+          case "toTrain": p.kind = "wait"; break;
+          case "alighted": exitRoute(p); break;
+          default: people.splice(i,1);
+        }
+        continue;
+      }
+      const [tx, tz] = p.path[0], dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz), step = p.spd*sdt;
+      p.walking = true; p.vx = dx; p.vz = dz;
+      if(d <= step){ p.x = tx; p.z = tz; p.path.shift(); } else { p.x += dx/d*step; p.z += dz/d*step; }
+      p.ph += Math.min(sdt, .12) * 2*Math.PI * .95;
+      const st = Math.floor(p.ph/Math.PI); if(st !== p.lastStep){ p.lastStep = st; footstep(p); }
+    }
+  }
+
+  /* ---------- 描画 ---------- */
+  function drawTrain(c, tr){
+    const {M, X, Z, Y, camX, P, em} = G, {shade, night, lum} = LOOK;
+    const cx = X(PLAN.tracks[tr.plat]), x0 = cx - M(1.4), x1 = cx + M(1.4);
+    const zF = Z(PLAN.stopZ) - tr.off, zEnd = Z(-320);
+    if(zF < zEnd) return;
+    const belle = tr.t.name === "BRIGHTON BELLE";
+    // ブライトン・ベルはプルマンの茶（下）とクリーム（窓まわり）、ほかは南部管区の緑
+    const LOW = belle ? [86,52,36] : [42,82,56], UP = belle ? [218,200,156] : [48,92,62];
+    const yRoof = Y(2.95), yWin0 = Y(2.15), yWin1 = Y(1.2), yBelt = Y(1.05), yBot = Y(-.55), yRail = Y(-.85);
+    const Q = (pts, fill) => { pathP(c, pts.map(p => P(...p))); c.fillStyle = fill; c.fill(); };
+    const sx = cx > camX ? x0 : x1;                      // カメラから見える側面
+    const win = mixc([255,224,168], [176,192,204], lum*.65);
+    const CAR = 20, cars = [];
+    for(let i = 0; i < 12; i++){ const a = zF - M(i*CAR), b = a - M(CAR - .8); if(a < zEnd) break; cars.push([a, Math.max(zEnd, b)]); }
+    // 線路の上の影
+    Q([[x0 - M(.25),yRail,zF],[x1 + M(.25),yRail,zF],[x1 + M(.25),yRail,zEnd],[x0 - M(.25),yRail,zEnd]], "rgba(0,0,0,.35)");
+    for(const [a, b] of cars){
+      // 屋根（上から見える。中央が明るい丸屋根）
+      const xm = (x0 + x1)/2;
+      Q([[x0,yRoof + M(.12),a],[xm,yRoof - M(.1),a],[xm,yRoof - M(.1),b],[x0,yRoof + M(.12),b]], shade([96,98,96], a, .95));
+      Q([[xm,yRoof - M(.1),a],[x1,yRoof + M(.12),a],[x1,yRoof + M(.12),b],[xm,yRoof - M(.1),b]], shade([96,98,96], a, .8));
+      // 側面：上が明るく下が暗い
+      const A = P(sx, yRoof, a), B = P(sx, yBot, a), g = c.createLinearGradient(0, A[1], 0, B[1]);
+      g.addColorStop(0, shade(UP, a, 1.05)); g.addColorStop(.45, shade(UP, a, .95)); g.addColorStop(.5, shade(LOW, a, .95)); g.addColorStop(1, shade(LOW, a, .6));
+      Q([[sx,yRoof + M(.12),a],[sx,yRoof + M(.12),b],[sx,yBot,b],[sx,yBot,a]], g);
+      Q([[sx,yBelt,a],[sx,yBelt,b],[sx,yBelt + M(.06),b],[sx,yBelt + M(.06),a]], shade(belle ? [180,150,90] : [30,56,40], a));   // 腰の帯
+      // 窓（枠つき）とドア（窓のあいだ、腰から下まで）
+      for(let w = a - M(1.6); w > b + M(1.8); w -= M(2.6)){
+        Q([[sx,yWin0,w],[sx,yWin0,w - M(1.5)],[sx,yWin1,w - M(1.5)],[sx,yWin1,w]], shade(LOW.map(v => v*.5), w));
+        Q([[sx,yWin0 + M(.07),w - M(.07)],[sx,yWin0 + M(.07),w - M(1.43)],[sx,yWin1 - M(.07),w - M(1.43)],[sx,yWin1 - M(.07),w - M(.07)]], shade(win, w, .78 + night*.6));
+        if(!belle) Q([[sx,yWin1 + M(.15),w - M(1.95)],[sx,yWin1 + M(.15),w - M(2.05)],[sx,yBot - M(.1),w - M(2.05)],[sx,yBot - M(.1),w - M(1.95)]], shade(LOW, w, .4));
+      }
+      // 台車と車輪
+      for(const bz of [a - M(2.6), b + M(2.6)]){
+        Q([[sx,yBot,bz + M(1.3)],[sx,yBot,bz - M(1.3)],[sx,yRail,bz - M(1.3)],[sx,yRail,bz + M(1.3)]], shade([22,22,22], bz));
+        for(const wz of [bz + M(.85), bz - M(.85)]){ const p = P(sx, Y(-.55), wz), r = M(.42)*p[3]; c.fillStyle = shade([40,40,38], wz); c.beginPath(); c.ellipse(p[0], p[1], r*.35, r, 0, 0, Math.PI*2); c.fill(); }
+      }
+      // 連結部の幌（車両のすきま）
+      Q([[sx,yRoof + M(.4),b],[sx,yRoof + M(.4),b - M(.8)],[sx,yBot,b - M(.8)],[sx,yBot,b]], shade([20,20,20], b));
+    }
+    // 手前の妻面：窓・警戒色の黄色・連結器
+    const A = P(x0, yRoof, zF), B = P(x0, yBot, zF), ge = c.createLinearGradient(0, A[1], 0, B[1]);
+    ge.addColorStop(0, shade(UP, zF, .95)); ge.addColorStop(1, shade(LOW, zF, .6));
+    Q([[x0,yRoof + M(.12),zF],[(x0+x1)/2,yRoof - M(.1),zF],[x1,yRoof + M(.12),zF],[x1,yBot,zF],[x0,yBot,zF]], ge);
+    for(const [wa, wb] of [[x0 + M(.2), x0 + M(1.05)], [x1 - M(1.05), x1 - M(.2)]]) Q([[wa,yWin0,zF+1],[wb,yWin0,zF+1],[wb,Y(1.35),zF+1],[wa,Y(1.35),zF+1]], shade(win, zF, .55 + night*.4));
+    if(!belle) Q([[x0+M(.85),Y(.65),zF+1],[x1-M(.85),Y(.65),zF+1],[x1-M(.85),Y(-.15),zF+1],[x0+M(.85),Y(-.15),zF+1]], shade([216,172,40], zF));
+    Q([[cx - M(.2),Y(-.3),zF+2],[cx + M(.2),Y(-.3),zF+2],[cx + M(.2),Y(-.6),zF+2],[cx - M(.2),Y(-.6),zF+2]], shade([24,24,24], zF));
+    // 入ってくる時は先頭なので白い標識灯、止まってからは最後尾になるので赤い尾灯
+    const lamp = (x, y, col) => { const p = P(x, y, zF + 3), r = Math.max(1, M(.16)*p[3]); const gg = c.createRadialGradient(p[0], p[1], 0, p[0], p[1], r*4); gg.addColorStop(0, col); gg.addColorStop(1, "rgba(0,0,0,0)"); c.fillStyle = gg; c.fillRect(p[0]-r*4, p[1]-r*4, r*8, r*8); };
+    if(tr.phase === "in"){ lamp(x0 + M(.45), Y(-.25), "rgba(255,246,220,.95)"); lamp(x1 - M(.45), Y(-.25), "rgba(255,246,220,.95)"); }
+    else lamp(cx, Y(-.35), "rgba(255,64,44,.95)");
+  }
+  function clearCanvas(id){
+    const cv = document.getElementById(id), c = cv.getContext("2d"), dpr = cv.width / G.W;
+    c.setTransform(1,0,0,1,0,0); c.clearRect(0, 0, cv.width, cv.height); c.setTransform(dpr,0,0,dpr,0,0);
+    return c;
+  }
+  const poseOf = p => p.walking ? {ph: p.ph, side: Math.abs(p.vx || 0) > Math.abs(p.vz || 0)*.9 ? Math.sign(p.vx) : 0} : {ph: null, side: 0};
+  // コートの色：暗い色の中に、ときどき紺・茶・灰（1965年の通勤客）
+  const COATS = [[34,32,30],[30,34,44],[52,40,30],[58,56,52],[40,44,36],[26,26,28]];
+  function personFill(c, p, shadeFn){
+    const {P, yF, em} = G, F = P(p.x, yF, p.z), k = F[3], base = COATS[Math.floor(p.o.tone*COATS.length)];
+    const head = F[1] - 18*em*k*PS*(p.o.h || 1);
+    const gr = c.createLinearGradient(0, head, 0, F[1]);
+    const top = shadeFn(base.map(v => v*1.9 + 18), p.z), mid = shadeFn(base, p.z), bot = shadeFn(base.map(v => v*.45), p.z);
+    gr.addColorStop(0, top); gr.addColorStop(.25, mid); gr.addColorStop(1, bot);
+    return gr;
+  }
+  // 改札の向こう：電車（外側の番線から）→ ホームの柱と人（遠い順）
+  function drawPlatforms(){
+    const c = clearCanvas("anim"), {P, X, Z, Y, M, em} = G, {shade} = LOOK;
+    const trains = Object.values(TR).sort((a,b) => Math.abs(PLAN.tracks[b.plat]) - Math.abs(PLAN.tracks[a.plat]));
+    for(const tr of trains) drawTrain(c, tr);
+    const items = [];
+    for(const isl of PLAN.islands) for(let mz = PLAN.barrierZ - ROOF.bay; mz > -300; mz -= ROOF.bay) items.push({z: Z(mz), col: X((isl.x0 + isl.x1)/2)});
+    for(const p of people) if(p.delay <= 0 && p.z < Z(PLAN.barrierZ)) items.push({z: p.z, p});
+    items.sort((a,b) => a.z - b.z);
+    for(const it of items){
+      if(it.col != null){
+        const x0 = it.col - M(.2), x1 = it.col + M(.2), A = P(x0, 0, it.z), B = P(x1, 0, it.z);
+        const g = c.createLinearGradient(A[0], 0, B[0], 0);
+        g.addColorStop(0, shade([58,74,62], it.z)); g.addColorStop(1, shade([24,30,26], it.z));
+        pathP(c, [P(x0, Y(ROOF.chord), it.z), P(x1, Y(ROOF.chord), it.z), P(x1, Y(0), it.z), P(x0, Y(0), it.z)]);
+        c.fillStyle = g; c.fill();
+      } else {
+        const p = it.p;
+        person(c, p.x, p.z, {...p.o, ...poseOf(p)}, personFill(c, p, (col, z) => shade(col, z, 1.1)));
+      }
+    }
+  }
+  // 改札のこちら側：コンコースの人（遠い順）。地下鉄の階段では沈んで消える／浮かんで現れる
+  function drawCrowd(){
+    const c = clearCanvas("crowd"), {Z, M} = G, st = PLAN.stairs;
+    const list = people.filter(p => p.delay <= 0 && p.z >= Z(PLAN.barrierZ)).sort((a,b) => a.z - b.z);
+    for(const p of list){
+      let sink = 0;
+      if(p.z < Z(st.z1) && p.x > G.X(st.x0) && p.x < G.X(st.x1)) sink = Math.min(M(3.4), (Z(st.z1) - p.z)*.8);
+      c.save();
+      if(sink > 0){ c.globalAlpha = Math.max(0, 1 - sink/M(2.4)); }
+      person(c, p.x, p.z, {...p.o, ...poseOf(p)}, personFill(c, p, (col, z) => LOOK.shade(col, z, 1)), sink);
+      c.restore();
+    }
+  }
+
+  /* =========================================================
+     音（Web Audio で合成）
+     ========================================================= */
+  const SND = {};
+  function soundInit(){
+    if(SND.master) return;
+    const a = audio, sr = a.sampleRate;
+    SND.master = a.createGain(); SND.master.gain.value = .9;
+    const comp = a.createDynamicsCompressor(); SND.master.connect(comp).connect(a.destination);
+    const buf = (sec, brown) => {
+      const b = a.createBuffer(1, Math.floor(sr*sec), sr), d = b.getChannelData(0); let last = 0;
+      for(let i=0;i<d.length;i++){ const w = Math.random()*2 - 1; if(brown){ last = (last + .02*w)/1.02; d[i] = last*3.5; } else d[i] = w; }
+      return b;
+    };
+    SND.white = buf(1.5, false); SND.brown = buf(4, true);
+    SND.an = a.createAnalyser(); SND.an.fftSize = 2048; SND.master.connect(SND.an);
+    window.__level = () => { const d = new Float32Array(SND.an.fftSize); SND.an.getFloatTimeDomainData(d); return Math.sqrt(d.reduce((s, v) => s + v*v, 0)/d.length); };
+    window.__mood = () => MU.mood;
+    const loopSrc = b => { const s = a.createBufferSource(); s.buffer = b; s.loop = true; s.start(); return s; };
+    // 音の種類ごとに音量の調節口（バス）を作る
+    SND.master.gain.value = VOL.master;
+    SND.bus = {};
+    for(const k of SOUNDS) if(k !== "master"){ const g = a.createGain(); g.gain.value = VOL[k]; g.connect(SND.master); SND.bus[k] = g; }
+    const chain = (src, type, f, q, g0, bus) => { const fl = a.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; const g = a.createGain(); g.gain.value = g0; src.connect(fl).connect(g).connect(SND.bus[bus]); return [fl, g]; };
+    [, SND.hub] = chain(loopSrc(SND.brown), "bandpass", 420, .7, 0, "crowd");        // 構内のざわめき
+    [, SND.hub2] = chain(loopSrc(SND.white), "bandpass", 1300, 2.2, 0, "crowd");
+    [SND.rumF, SND.rum] = chain(loopSrc(SND.brown), "lowpass", 160, .7, 0, "train");  // 走行音
+    const o1 = a.createOscillator(); o1.type = "sawtooth"; o1.frequency.value = 120; o1.start();
+    [SND.whF, SND.wh] = chain(o1, "lowpass", 900, 1, 0, "train"); SND.osc = o1;      // モーター
+    SND.tokens = {step: 0, door: 0, clack: 0}; SND.keys = {};
+  }
+  function burst({buf = SND.white, type = "bandpass", f = 1000, q = 1, gain = .1, dur = .05, pan = 0, at = 0, attack = .002, bus = "train"}){
+    const a = audio, t0 = a.currentTime + at;
+    const s = a.createBufferSource(); s.buffer = buf;
+    const fl = a.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q;
+    const g = a.createGain(); g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(gain, t0 + attack); g.gain.exponentialRampToValueAtTime(.0001, t0 + dur);
+    let node = s.connect(fl).connect(g);
+    if(a.createStereoPanner){ const p = a.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan)); node = node.connect(p); }
+    node.connect(SND.bus[bus]);
+    s.start(t0, Math.random()*.5); s.stop(t0 + dur + .05);
+  }
+  const panOf = x => (x / G.W)*2 - 1;
+  function footstep(p){
+    if(!soundOn || !SND.master || SND.tokens.step < 1) return;
+    const F = G.P(p.x, G.yF, p.z), k = F[3];
+    if(k < .3) return;
+    SND.tokens.step -= 1;
+    const g = Math.min(.16, .07*k*k);
+    burst({f: 2600 + Math.random()*1400, q: 1.6, gain: g, dur: .045, pan: panOf(F[0]), bus: "steps"});   // 革靴のかかと
+    burst({type: "lowpass", f: 180, q: .7, gain: g*1.4, dur: .07, pan: panOf(F[0]), bus: "steps"});       // 敷石に響く低い音
+  }
+  function tone({f, lfoF, lfoD, lfoType = "sine", g, dur, rise = .03, bus}){
+    const a = audio, t0 = a.currentTime, o = a.createOscillator(), gg = a.createGain(), lfo = a.createOscillator(), lg = a.createGain();
+    o.frequency.value = f; lfo.type = lfoType; lfo.frequency.value = lfoF; lg.gain.value = lfoD;
+    lfo.connect(lg).connect(o.frequency);
+    gg.gain.setValueAtTime(0, t0); gg.gain.linearRampToValueAtTime(g, t0 + rise); gg.gain.setValueAtTime(g, t0 + dur*.8); gg.gain.exponentialRampToValueAtTime(.0001, t0 + dur);
+    o.connect(gg).connect(SND.bus[bus]); o.start(t0); lfo.start(t0); o.stop(t0 + dur + .05); lfo.stop(t0 + dur + .05);
+  }
+  let sndPrev = {};
+  function updateSound(sdt, rdt){
+    if(!SND.master) return;
+    const a = audio, t = a.currentTime, set = (param, v, tc = .25) => param.setTargetAtTime(v, t, tc);
+    if(!soundOn){ [SND.hub, SND.hub2, SND.rum, SND.wh].forEach(g => set(g.gain, 0, .1)); return; }
+    const T = SND.tokens;
+    T.step = Math.min(3, T.step + rdt*16); T.door = Math.min(2, T.door + rdt*5); T.clack = Math.min(2, T.clack + rdt*10);
+    const lvl = crowdLevel(now);
+    set(SND.hub.gain, .015 + .11*lvl + .0015*people.length); set(SND.hub2.gain, .004 + .02*lvl);
+    let rum = 0, wh = 0, fq = 110;
+    for(const tr of Object.values(TR)){
+      const atten = 1/(1 + (G.M(-PLAN.stopZ) + tr.off)/G.M(45)), pan = panOf(G.P(G.X(PLAN.tracks[tr.plat]), 0, G.Z(PLAN.stopZ))[0])*.7;
+      const prev = sndPrev[tr.key];
+      if(prev != null && sdt > 0){
+        const v = Math.abs(tr.off - prev)/sdt, sn = Math.min(1, v/G.M(7));
+        if(sn*atten > rum){ rum = .55*sn*atten; wh = .05*sn*atten; fq = 110 + 720*sn; }
+        SND.keys[tr.key] = SND.keys[tr.key] || {};
+        const K = SND.keys[tr.key];
+        K.dist = (K.dist || 0) + v*sdt;
+        if(K.dist > G.M(18)){ K.dist %= G.M(18); if(T.clack >= 1 && sn > .05){ T.clack -= 1; const g = .22*atten*Math.sqrt(sn); burst({type:"lowpass", f: 260, gain: g, dur: .09, pan}); burst({type:"lowpass", f: 260, gain: g*.9, dur: .09, pan, at: .09}); } }
+        if(tr.phase === "in" && tr.prog > .86 && !K.squeal){ K.squeal = 1; tone({f: 3100 + Math.random()*500, lfoF: 6, lfoD: 40, g: .025*atten, dur: 2.4, rise: .4, bus: "brakes"}); }   // ブレーキのきしみ
+        if(tr.phase === "dwell"){
+          const left = tr.dep - now;
+          if(left < 1.8 && left > .15){ let ex = sdt*.9; while(ex > 0 && T.door >= 1){ if(Math.random() < ex){ T.door -= 1; burst({type:"lowpass", f: 140 + Math.random()*90, q: .8, gain: .32*atten, dur: .22, pan, at: Math.random()*.1, bus: "doors"}); burst({f: 900, gain: .05*atten, dur: .04, pan, bus: "doors"}); } ex -= 1; } }   // スラムドアを閉める音
+          if(left <= .12 && !K.whistle){ K.whistle = 1; tone({f: 2850, lfoF: 32, lfoD: 120, lfoType: "square", g: .05*Math.max(.4, atten), dur: .95, bus: "whistle"}); }   // 車掌の笛
+          rum = Math.max(rum, .02*atten);
+        }
+      }
+      sndPrev[tr.key] = tr.off;
+    }
+    set(SND.rum.gain, rum, .3); set(SND.wh.gain, wh, .3); set(SND.osc.frequency, fq, .1);
+  }
+
+  /* =========================================================
+     時間帯で変わるジャズ（Web Audio でその場で演奏する。録音は使わない）
+     ・朝（5〜11時）  ：F の明るい曲。テンポ 112、ブラシ、ベースは2拍ずつ、ヴィブラフォンが歌う
+     ・昼（11〜17時） ：B♭ のミディアム・スウィング。テンポ 148、ライド・シンバル、ウォーキング・ベース、ピアノ
+     ・夜（17〜5時）  ：D♭ のバラード。テンポ 64、ゆっくりしたブラシ、エレピの和音、ミュート・トランペット
+     コード進行はどれも一般的なジャズの進行で、メロディーは毎回その場で即興する。
+     盤の時計（早送りを含む）が別の時間帯に入ると、小節の頭でゆっくり入れ替わる
+     ========================================================= */
+  const NOTE = {C:0, Db:1, D:2, Eb:3, E:4, F:5, Gb:6, G:7, Ab:8, A:9, Bb:10, B:11};
+  const QUAL = {maj7:[0,4,7,11], "6":[0,4,7,9], m7:[0,3,7,10], "7":[0,4,7,10], m9:[0,3,7,10,14], "13":[0,4,10,14,21], maj9:[0,4,7,11,14], "7b9":[0,4,7,10,13], "maj7#11":[0,4,7,11,18]};
+  // コードの構成音（テンション抜き）と、メロディーに使える音。
+  // 使える音は「曲の調の音階」を基本に、調にない構成音（D7 の F♯、A♭7♭9 の A など）を入れ、
+  // それとぶつかる調の音（F、B♭）を外す。これで伴奏とメロディーが半音でぶつからない
+  const TONES = {maj7:[0,4,7,11], "6":[0,4,7,9], maj9:[0,4,7,11,14], "maj7#11":[0,4,11,18], m7:[0,3,7,10], m9:[0,3,7,10,14], "7":[0,4,7,10], "13":[0,4,7,10,21], "7b9":[0,4,7,10,13]};
+  const MAJOR = [0,2,4,5,7,9,11];
+  function pitchSets(st, ch){
+    const key = MAJOR.map(i => (st.key + i) % 12);
+    const tones = TONES[ch.q].map(i => (ch.root + i) % 12);
+    const scale = new Set(key);
+    TONES[ch.q].forEach(i => {
+      const pc = (ch.root + i) % 12;
+      if(scale.has(pc)) return;
+      scale.add(pc);
+      const raised = [4, 6, 11, 18].includes(i);           // 長3度・♯11・長7度は上げた音、♭9などは下げた音
+      const clash = (pc + (raised ? 11 : 1)) % 12;
+      if(!tones.includes(clash)) scale.delete(clash);
+    });
+    // 構成音の半音上にくる音（長調のコードの4度、m7 の♭6度、属7の♭13度など）は濁るので使わない
+    for(const pc of [...scale]) if(!tones.includes(pc) && tones.includes((pc + 11) % 12)) scale.delete(pc);
+    return {tones, scale: [...scale]};
+  }
+  // そのコードがあと何拍続くか（2つのコードがある小節は2拍ずつ）
+  const beatsLeft = (st, bar, beat) => Array.isArray(st.prog[bar % st.prog.length][0]) ? (beat < 2 ? 2 - beat : 4 - beat) : 4 - beat;
+  const MUSIC = {
+    // 朝：静かで上品に。ゆっくりのテンポで、9度や♯11度の柔らかい和音、ブラシはそっと2拍目と4拍目だけ、
+    // エレピはアルペジオ気味にゆったり鳴らし、ヴィブラフォンは2小節歌って2小節休む
+    morning: {name:{en:"Morning jazz · quiet and elegant · F major · 80 bpm", ja:"朝のジャズ（静かで上品に・ヘ長調・テンポ80）"}, key:5, bpm:80, bass:"soft", drums:"brushSoft", comp:"rhodesRoll", lead:"vibesSoft",
+      prog:[["F","maj9"],["Bb","maj7#11"],["A","m7"],["D","m9"],["G","m9"],["C","13"],["F","maj9"],["F","maj9"]]},
+    day:     {name:{en:"Daytime jazz · B♭ swing · 148 bpm", ja:"昼のジャズ（変ロ長調のスウィング・テンポ148）"}, key:10, bpm:148, bass:"walk", drums:"ride", comp:"piano", lead:"piano",
+      prog:[["Bb","6"],["G","7"],["C","m7"],["F","7"],[["D","m7"],["G","7"]],[["C","m7"],["F","7"]],["Bb","maj7"],[["C","m7"],["F","7"]]]},
+    night:   {name:{en:"Night jazz · D♭ ballad · 64 bpm", ja:"夜のジャズ（変ニ長調のバラード・テンポ64）"}, key:1, bpm:64, bass:"ballad", drums:"brushSlow", comp:"rhodesPad", lead:"trumpet",
+      prog:[["Eb","m9"],["Ab","13"],["Db","maj9"],["Bb","m9"],["Eb","m9"],["Ab","7b9"],["Db","maj7"],["Gb","maj7#11"]]},
+  };
+  const moodAt = m => { const h = (((m % 1440) + 1440) % 1440)/60; return h >= 5 && h < 11 ? "morning" : h >= 11 && h < 17 ? "day" : "night"; };
+  const mtof = m => 440 * Math.pow(2, (m - 69)/12);
+  // 1小節ぶんのコード（2つある小節は2拍ずつ）
+  function chordAt(st, bar, beat){
+    const c = st.prog[bar % st.prog.length], ch = Array.isArray(c[0]) ? c[beat < 2 ? 0 : 1] : c;
+    return {root: NOTE[ch[0]], q: ch[1]};
+  }
+
+  const MU = {mood: null, next: 0, bar: 0, beat: 0, g: null, lead: 60, phrase: 0, switching: false};
+  function musicNodes(){
+    if(MU.g) return;
+    const a = audio;
+    MU.g = a.createGain(); MU.g.gain.value = 0;
+    // 構内に響く感じの残響（減衰するノイズをインパルス応答にする）
+    const len = Math.floor(a.sampleRate*2.4), ir = a.createBuffer(2, len, a.sampleRate);
+    for(let ch=0; ch<2; ch++){ const d = ir.getChannelData(ch); for(let i=0;i<len;i++) d[i] = (Math.random()*2 - 1) * Math.pow(1 - i/len, 3.2); }
+    const conv = a.createConvolver(); conv.buffer = ir;
+    const wet = a.createGain(), dry = a.createGain(); wet.gain.value = .32; dry.gain.value = .85;
+    MU.g.connect(dry).connect(SND.bus.music); MU.g.connect(conv).connect(wet).connect(SND.bus.music);
+    MU.out = MU.g;
+    // ドラムは残響に通さない（ノイズの音が響きで尾を引いて、ずっと「シュー」と鳴って聞こえるのを防ぐ）
+    MU.dr = a.createGain(); MU.dr.gain.value = 0; MU.dr.connect(SND.bus.music);
+  }
+  // ---- 楽器（すべて合成） ----
+  function env(g, t, a, peak, dec, end){ g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(Math.max(1e-4, end), t + a + dec); }
+  function osc(type, f, t, dur){ const o = audio.createOscillator(); o.type = type; o.frequency.setValueAtTime(f, t); o.start(t); o.stop(t + dur + .05); return o; }
+  function bassNote(t, m, dur, v){
+    const g = audio.createGain(), lp = audio.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 700;
+    env(g, t, .008, .5*v, dur, .02);
+    osc("triangle", mtof(m), t, dur).connect(lp); osc("sine", mtof(m), t, dur).connect(lp);
+    lp.connect(g).connect(MU.out);
+  }
+  function epiano(t, notes, dur, v, bright = 1){
+    for(const m of notes){
+      const g = audio.createGain(); env(g, t, .01, .09*v, dur, .001);
+      osc("sine", mtof(m), t, dur).connect(g);
+      const g2 = audio.createGain(); env(g2, t, .005, .03*v*bright, Math.min(dur, .4), .0005);
+      osc("sine", mtof(m)*2.01, t, dur).connect(g2); g2.connect(MU.out);
+      g.connect(MU.out);
+    }
+  }
+  function pianoNote(t, m, dur, v, lead = false){
+    const g = audio.createGain(), lp = audio.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 2600;
+    if(lead) mono(t, g);
+    env(g, t, .004, .13*v, Math.max(.25, dur*1.4), .001);
+    osc("triangle", mtof(m), t, dur*1.5).connect(lp);
+    const g2 = audio.createGain(); env(g2, t, .003, .05*v, .25, .0005); osc("sine", mtof(m)*3, t, .3).connect(g2); g2.connect(MU.out);
+    lp.connect(g).connect(MU.out);
+  }
+  function vibes(t, m, dur, v, bright = 1){
+    const g = audio.createGain(), trem = audio.createGain(), lfo = osc("sine", 5.2, t, dur + .6), ld = audio.createGain();
+    ld.gain.value = .35; lfo.connect(ld).connect(trem.gain); trem.gain.value = .75;
+    mono(t, g);
+    env(g, t, .004, .12*v, dur + .4, .0005);
+    osc("sine", mtof(m), t, dur + .6).connect(g);
+    const g2 = audio.createGain(); env(g2, t, .002, .04*v*bright, .3, .0003); osc("sine", mtof(m)*4, t, .4).connect(g2); g2.connect(trem);
+    g.connect(trem).connect(MU.out);
+  }
+  function trumpet(t, m, dur, v){
+    const g = audio.createGain(), bp = audio.createBiquadFilter(), lp = audio.createBiquadFilter();
+    bp.type = "bandpass"; bp.frequency.value = 1150; bp.Q.value = 1.6; lp.type = "lowpass"; lp.frequency.value = 2400;   // ハーマン・ミュートの鼻にかかった音
+    mono(t, g);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.075*v, t + .06); g.gain.setValueAtTime(.075*v, t + dur*.75); g.gain.exponentialRampToValueAtTime(.0005, t + dur + .25);
+    const o = osc("sawtooth", mtof(m), t, dur + .3), vib = osc("sine", 5, t, dur + .3), vd = audio.createGain();
+    vd.gain.setValueAtTime(0, t); vd.gain.linearRampToValueAtTime(mtof(m)*.006, t + Math.min(.6, dur*.7)); vib.connect(vd).connect(o.frequency);
+    o.connect(bp).connect(lp).connect(g).connect(MU.out);
+  }
+  function noiseHit(t, {f = 8000, type = "highpass", q = .7, dur = .1, v = .1, attack = .002}){
+    const s = audio.createBufferSource(); s.buffer = SND.white;
+    const fl = audio.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q;
+    const g = audio.createGain(); env(g, t, attack, v, dur, .0003);
+    s.connect(fl).connect(g).connect(MU.dr); s.start(t, Math.random()*.4); s.stop(t + attack + dur + .05);
+  }
+  const ride = (t, v) => { noiseHit(t, {f: 6500, dur: .3, v: .035*v}); noiseHit(t, {f: 9000, type: "bandpass", q: 2.5, dur: .12, v: .025*v}); };
+  const hat = (t, v) => noiseHit(t, {f: 7000, dur: .05, v: .035*v});
+  const kick = (t, v) => { const g = audio.createGain(); env(g, t, .004, .18*v, .18, .001); const o = osc("sine", 70, t, .25); o.frequency.exponentialRampToValueAtTime(45, t + .15); o.connect(g).connect(MU.dr); };
+  const brushSwish = (t, dur, v) => noiseHit(t, {f: 2200, type: "bandpass", q: .5, dur, v: .006*v, attack: dur*.5});   // ブラシで円を描く音：ごく小さく
+  const brushTap = (t, v) => noiseHit(t, {f: 1900, type: "bandpass", q: .9, dur: .14, v: .06*v});
+
+  // ---- 1拍ずつ演奏を予約する ----
+  const rh = () => (Math.random() - .5)*.012;      // わずかなタイミングの揺れ
+  function voicing(ch, lo = 52){
+    // ルートを省いた3度・7度・9度などの和音を中音域にまとめる。♯11 がある時は5度を抜き、半音でくっつく音は1オクターブ離す
+    let ints = QUAL[ch.q].filter(i => i !== 0);
+    if(ints.includes(18)) ints = ints.filter(i => i !== 7);
+    const ns = ints.map(i => { let m = ch.root + (i % 24); while(m < lo) m += 12; while(m > lo + 14) m -= 12; return m; }).sort((a,b) => a-b);
+    for(let i=1;i<ns.length;i++) if(ns[i] - ns[i-1] < 2){ ns[i] += 12; ns.sort((a,b) => a-b); i = 0; }
+    return ns;
+  }
+  function bassFor(st, ch, next, beat){
+    const base = m => { let x = m + 36; while(x < 31) x += 12; while(x > 45) x -= 12; return x; };
+    if(st.bass === "walk"){
+      if(beat === 0) return base(ch.root);
+      if(beat === 3) return base(next.root) + (Math.random() < .5 ? 1 : -1);         // 次のコードへ半音で寄る
+      const tones = QUAL[ch.q].slice(1, 4); return base(ch.root + tones[Math.floor(Math.random()*tones.length)]);
+    }
+    if(beat === 0) return base(ch.root);
+    if(beat === 2) return st.bass === "soft" && Math.random() < .4 ? null : base(ch.root + 7);
+    return null;
+  }
+  function leadNote(st, ch, lo, hi, strong){
+    const {tones, scale} = pitchSets(st, ch), pcs = strong ? tones : scale;
+    const cand = [];
+    for(let m = lo; m <= hi; m++) if(pcs.includes(m % 12)) cand.push(m);
+    // 近い音ほど選ばれやすく（順次進行が中心）、同じ音の連打と大きな跳躍は少なく
+    const w = cand.map(m => { const d = Math.abs(m - MU.lead); return d === 0 ? .25 : d > 7 ? .02 : Math.exp(-d/2.2); });
+    let r = Math.random()*w.reduce((a,b) => a+b, 0), i = 0;
+    while(i < cand.length - 1 && (r -= w[i]) > 0) i++;
+    MU.lead = cand[i]; return cand[i];
+  }
+  // 旋律楽器は単音：次の音が始まったら前の音を止める
+  function mono(t, g){ if(MU.last){ try{ MU.last.gain.cancelScheduledValues(t); MU.last.gain.setTargetAtTime(0, t, .025); }catch(e){} } MU.last = g; }
+  function playBeat(st, bar, beat, t, spb){
+    const ch = chordAt(st, bar, beat), nx = beat === 3 ? chordAt(st, bar + 1, 0) : chordAt(st, bar, beat + 1);
+    const sw = spb*2/3;                                // スウィングの裏拍
+    // ドラム
+    if(st.drums === "ride"){
+      ride(t + rh(), beat % 2 ? 1 : .8);
+      if(beat % 2) ride(t + sw + rh(), .6);
+      if(beat % 2) hat(t + rh(), 1);
+      kick(t, .25);
+    } else if(st.drums === "brushSoft"){
+      if(beat % 2 && Math.random() < .85) brushTap(t + rh(), .32);            // そっと2拍目と4拍目だけ
+    } else if(st.drums === "brush"){
+      if(beat % 2 === 0) brushSwish(t, spb*1.5, 1);              // 2拍に1回だけ
+      if(beat % 2){ brushTap(t + rh(), .8); hat(t + rh(), .7); }
+      if(Math.random() < .35) brushTap(t + sw + rh(), .35);
+    } else {
+      if(beat === 0 && Math.random() < .75) brushSwish(t, spb*1.6, .8);   // バラードは小節の頭にだけ、ゆっくり1回
+      if(beat % 2) brushTap(t + rh(), .5);
+    }
+    // ベース
+    const b = bassFor(st, ch, nx, beat);
+    if(b != null) bassNote(t + rh(), b, st.bass === "walk" ? spb*.9 : spb*1.85, st.bass === "ballad" ? .8 : st.bass === "soft" ? .62 : 1);
+    // 伴奏
+    const vo = voicing(ch), left = beatsLeft(st, bar, beat)*spb;   // このコードが続く残りの時間
+    if(st.comp === "piano"){
+      if(beat === 0 && Math.random() < .7) for(const m of vo) pianoNote(t + rh(), m, spb*.5, .55);
+      if(beat === 1 && Math.random() < .6) for(const m of vo) pianoNote(t + sw + rh(), m, spb*.4, .5);      // 2拍目の裏（チャールストン）
+      if(beat === 2 && Math.random() < .3) for(const m of vo) pianoNote(t + rh(), m, spb*.5, .45);
+    } else if(st.comp === "rhodesRoll"){
+      // 和音を下から少しずつずらして鳴らす（ゆったりしたアルペジオ）
+      if(beat === 0) vo.forEach((m, i) => epiano(t + i*.07, [m], left*.97 - i*.07, .62, .45));
+      if(beat === 2 && Math.random() < .45) epiano(t + rh(), [vo[vo.length - 1] + 12], spb*1.8, .35, .4);
+    } else if(st.comp === "rhodesLight"){
+      if(beat === 0) epiano(t, vo, Math.min(spb*2.2, left*.97), .9);
+      if(beat === 2 && Math.random() < .55) epiano(t + sw, vo, Math.min(spb*1.2, (left - sw)*.97), .6);
+    } else {
+      if(beat === 0) epiano(t, vo, left*.98, 1.1, .6);
+      if(beat === 2 && Math.random() < .4) epiano(t + rh(), [vo[vo.length-1] + 12], spb*2, .5);               // 高い音をひとつ足す
+    }
+    // メロディー：4小節ずつ、3小節歌って1小節休む
+    const inPhrase = st.lead === "vibesSoft" ? (bar % 4) < 2 : (bar % 4) !== 3;
+    if(!inPhrase) return;
+    const fit = d => Math.min(d, left*.95);
+    if(st.lead === "vibesSoft"){
+      // 拍の頭に構成音を置き、長めに響かせる。音数は少なく、間をたっぷり
+      const last = (bar % 4) === 1 && beat === 2;
+      if(last){ vibes(t + rh(), leadNote(st, ch, 67, 81, true), fit(spb*2.2), .5, .35); return; }
+      if(beat === 0 || (beat === 2 && Math.random() < .5)) vibes(t + rh(), leadNote(st, ch, 67, 81, true), fit(spb*(Math.random() < .5 ? 1.8 : .95)), .5, .35);
+      else if(beat === 1 && Math.random() < .3) vibes(t + sw + rh(), leadNote(st, ch, 67, 81, false), fit(spb*.5), .36, .35);
+      return;
+    }
+    if(st.lead === "trumpet"){
+      // バラード：拍の頭は構成音で長め、ときどき裏拍で経過音
+      if(beat === 0 || (beat === 2 && Math.random() < .55)) trumpet(t + .02 + rh(), leadNote(st, ch, 62, 76, true), fit(spb*(beat === 0 && Math.random() < .5 ? 1.8 : .95)), .9);
+      else if(Math.random() < .3) trumpet(t + sw, leadNote(st, ch, 62, 76, false), fit(spb*.3), .65);
+    } else {
+      const lead = st.lead === "vibes" ? vibes : (t2, m, d, v) => pianoNote(t2, m, d, v, true);
+      const lo = st.lead === "vibes" ? 69 : 67, hi = st.lead === "vibes" ? 84 : 82;
+      const r = Math.random(), lastBeat = (bar % 4) === 2 && beat === 3, strong = beat % 2 === 0;
+      if(lastBeat){ lead(t + rh(), leadNote(st, ch, lo, hi, true), fit(spb*1.5), .9); return; }       // フレーズの終わりは構成音で長めに
+      if(r < .55){ lead(t + rh(), leadNote(st, ch, lo, hi, strong), fit(sw*.9), .85); lead(t + sw + rh(), leadNote(st, ch, lo, hi, false), fit((spb - sw)*.9), .6); }
+      else if(r < .85) lead(t + rh(), leadNote(st, ch, lo, hi, strong), fit(spb*.9), .85);
+    }
+  }
+  // 少し先まで予約していく（画面の描画とは別のタイマー）
+  function musicTick(){
+    if(!audio || !SND.bus || audio.state !== "running") return;
+    musicNodes();
+    const a = audio, now_ = a.currentTime;
+    if(!soundOn){ MU.g.gain.setTargetAtTime(0, now_, .3); MU.dr.gain.setTargetAtTime(0, now_, .3); MU.mood = null; return; }
+    const want = moodAt(now);
+    if(MU.simAt != null && Math.abs(now - MU.simAt) > 30 && want !== MU.mood){ MU.mood = null; MU.switching = false; }   // 時刻が飛んだらすぐ切り替える
+    MU.simAt = now;
+    if(!MU.mood){ MU.mood = want; MU.bar = 0; MU.beat = 0; MU.next = now_ + .15; for(const n of [MU.g, MU.dr]){ n.gain.cancelScheduledValues(now_); n.gain.setTargetAtTime(1, now_, .8); } updateNowPlaying(); }
+    if(MU.next < now_) MU.next = now_ + .05;
+    while(MU.next < now_ + .3){
+      if(MU.beat === 0 && want !== MU.mood && !MU.switching){ MU.switching = true; MU.switchAt = MU.next + 1.6; for(const n of [MU.g, MU.dr]) n.gain.setTargetAtTime(0, MU.next, .45); }   // 小節の頭からゆっくり消して
+      if(MU.switching && MU.next >= MU.switchAt){                                                                                                   // 次の曲を頭から
+        MU.mood = moodAt(now); MU.switching = false; MU.bar = 0; MU.beat = 0; MU.lead = 70; MU.last = null;
+        for(const n of [MU.g, MU.dr]){ n.gain.cancelScheduledValues(MU.next); n.gain.setValueAtTime(0, MU.next); n.gain.setTargetAtTime(1, MU.next, 1.0); } updateNowPlaying();
+      }
+      const st = MUSIC[MU.mood], spb = 60/st.bpm;
+      playBeat(st, MU.bar, MU.beat, MU.next, spb);
+      MU.next += spb;
+      if(++MU.beat === 4){ MU.beat = 0; MU.bar++; }
+    }
+  }
+  setInterval(musicTick, 40);
+  function updateNowPlaying(){
+    const el = document.getElementById("nowPlaying");
+    if(el) el.textContent = MU.mood ? (LANG === "ja" ? "いま流れている曲：" : "Now playing: ") + MUSIC[MU.mood].name[LANG] : "";
+  }
+
+  let animReady = false;
+  function animate(dtMs){
+    if(!G || !LOOK) return;
+    const rdt = Math.min(.1, dtMs/1000), sdt = rdt * (mode === "live" ? 1 : speed);   // 早送りの倍率で人も電車も進む
+    if(animNow != null && Math.abs(now - animNow) > 30){ people.length = 0; animReady = false; lastEvt = null; sndPrev = {}; }
+    animNow = now;
+    UP = upcoming(); TR = trainsNow();
+    if(!animReady){
+      animReady = true; lastEvt = now;
+      const lvl = crowdLevel(now), share = toPlatformShare(now);
+      for(let i=0, n = Math.round(1 + 18*lvl*share); i<n; i++){
+        spawnDeparting();
+        const p = people[people.length-1];
+        if(p.kind === "watchGo"){ const s = p.path[p.path.length-1]; p.x = s[0]; p.z = s[1]; p.path = []; p.kind = "watch"; }
+        else if(p.path.length){ const s = p.path[Math.floor(Math.random()*p.path.length)]; p.x = s[0]; p.z = s[1]; p.path = p.path.slice(p.path.indexOf(s) + 1); }
+      }
+      for(const tr of Object.values(TR)) if(tr.phase === "dwell") for(let i=0, n = Math.round(1 + 8*lvl*share); i<n; i++){ const s = doorSpot(tr.plat); addWalker(s, [], "wait", {plat: tr.plat}); }
+    }
+    simPeople(sdt);
+    drawPlatforms(); drawCrowd();
+    updateSound(sdt, rdt);
+  }
+
+  /* =========================================================
+     配置図の表示（画面の絵と同じ PLAN から描く）
+     ========================================================= */
+  function planSVG(){
+    const ja = LANG === "ja", S = 7;   // 1m = 7px
+    const minX = -36, maxX = 34, minY = -30, maxY = 70;
+    const px = mx => (-mx - minX)*S, py = mz => (-mz - minY)*S;   // 北が上（x は東が右になるよう反転）
+    const W = (maxX - minX)*S, H = (maxY - minY)*S;
+    const t = (en, jp) => ja ? jp : en;
+    let o = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" font-family="Barlow Condensed,Noto Sans JP,sans-serif" font-size="11">`;
+    o += `<rect width="${W}" height="${H}" fill="#efe7d2"/>`;
+    // 駅前の通り
+    o += `<rect x="0" y="0" width="${W}" height="${py(PLAN.entranceZ + 2)}" fill="#d9cfb6"/><text x="${W/2}" y="${py(PLAN.entranceZ + 5)}" text-anchor="middle" fill="#5d5547">${t("STATION FORECOURT · STREET (NORTH)","駅前広場・通り（北）")}</text>`;
+    // コンコース
+    o += `<rect x="${px(PLAN.westX)}" y="${py(PLAN.entranceZ + 2)}" width="${px(PLAN.eastX) - px(PLAN.westX)}" height="${py(PLAN.barrierZ) - py(PLAN.entranceZ + 2)}" fill="#f8f3e6" stroke="#8d8370"/>`;
+    o += `<text x="${px(16)}" y="${py(-2)}" fill="#5d5547" font-size="13" font-weight="700">${t("CONCOURSE","コンコース")}</text>`;
+    // 入口
+    for(const mx of [-8, 0, 8]) o += `<rect x="${px(mx) - 12}" y="${py(PLAN.entranceZ + 2) - 3}" width="24" height="6" fill="#f8f3e6"/>`;
+    o += `<text x="${px(8)}" y="${py(PLAN.entranceZ + 2) + 14}" text-anchor="middle" fill="#7a2f1d">▼ ${t("MAIN ENTRANCE","入口")}</text>`;
+    // カメラと画角
+    const cz = PLAN.camera.z, half = Math.atan(innerWidth/2 / (CFG.persp));
+    const fx = 40*Math.tan(half);
+    o += `<path d="M${px(0)},${py(Math.min(cz, PLAN.entranceZ + 1))} L${px(-fx)},${py(PLAN.barrierZ)} L${px(fx)},${py(PLAN.barrierZ)} Z" fill="rgba(176,68,42,.08)" stroke="rgba(176,68,42,.5)" stroke-dasharray="3 3"/>`;
+    o += `<circle cx="${px(0)}" cy="${py(Math.min(cz, PLAN.entranceZ + 1))}" r="5" fill="#b0442a"/><text x="${px(0) + 9}" y="${py(Math.min(cz, PLAN.entranceZ + 1)) + 4}" fill="#b0442a">${t("VIEWPOINT (mezzanine, 4.4m)","視点（北側の中2階・高さ4.4m）")}</text>`;
+    // 発車標と灯り
+    o += `<rect x="${px(3.45)}" y="${py(0) - 3}" width="${6.9*S}" height="6" fill="#1d1a15"/><text x="${px(0)}" y="${py(0) - 7}" text-anchor="middle" font-weight="700">${t("DEPARTURE BOARD (double-sided, on chains)","発車案内（両面式・梁から鎖で吊る）")}</text>`;
+    for(const mx of PLAN.lamps) o += `<circle cx="${px(mx)}" cy="${py(1.3)}" r="3" fill="#d9a441"/>`;
+    // 地下鉄の階段
+    const st = PLAN.stairs;
+    o += `<rect x="${px(st.x1)}" y="${py(st.z1)}" width="${(st.x1 - st.x0)*S}" height="${(st.z1 - st.z0)*S}" fill="#2d4a7a"/><text x="${px((st.x0+st.x1)/2)}" y="${py(st.z0) + 13}" text-anchor="middle" fill="#2d4a7a">${t("UNDERGROUND ↓","地下鉄 ↓")}</text>`;
+    // 東側（1〜8番線）
+    o += `<rect x="${px(PLAN.eastX)}" y="${py(PLAN.entranceZ + 2)}" width="${W - px(PLAN.eastX)}" height="${H - py(PLAN.entranceZ + 2)}" fill="#ddd3bb"/>`;
+    o += `<text x="${(px(PLAN.eastX) + W)/2}" y="${py(-30)}" text-anchor="middle" fill="#5d5547" transform="rotate(90 ${(px(PLAN.eastX) + W)/2} ${py(-30)})">${t("PLATFORMS 1–8 (EASTERN SIDE) →","1〜8番線（東側の駅）→")}</text>`;
+    // 改札の柵と改札口
+    o += `<line x1="${px(PLAN.westX)}" y1="${py(PLAN.barrierZ)}" x2="${px(PLAN.eastX)}" y2="${py(PLAN.barrierZ)}" stroke="#2c3b31" stroke-width="3"/>`;
+    for(const isl of PLAN.islands){ const g = (isl.x0 + isl.x1)/2; o += `<rect x="${px(g + 1.4)}" y="${py(PLAN.barrierZ) - 3}" width="${2.8*S}" height="6" fill="#efe7d2"/>`; }
+    o += `<text x="${px(PLAN.westX) + 4}" y="${py(PLAN.barrierZ) - 6}" fill="#2c3b31">${t("BARRIER · GATES","改札の柵・改札口")}</text>`;
+    // ホームと線路
+    for(const isl of PLAN.islands){
+      o += `<rect x="${px(isl.x1)}" y="${py(PLAN.barrierZ)}" width="${(isl.x1 - isl.x0)*S}" height="${H - py(PLAN.barrierZ)}" fill="#c8bea8" stroke="#8d8370"/>`;
+      o += `<text x="${px((isl.x0+isl.x1)/2)}" y="${py(-40)}" text-anchor="middle" fill="#3a352c">${isl.plats.map(p => p).join(" | ")}</text>`;
+    }
+    for(const [p, tx] of Object.entries(PLAN.tracks)){
+      o += `<line x1="${px(tx - .72)}" y1="${py(PLAN.bufferZ)}" x2="${px(tx - .72)}" y2="${H}" stroke="#6b6252"/><line x1="${px(tx + .72)}" y1="${py(PLAN.bufferZ)}" x2="${px(tx + .72)}" y2="${H}" stroke="#6b6252"/>`;
+      o += `<rect x="${px(tx + 1.3)}" y="${py(PLAN.bufferZ) - 2}" width="${2.6*S}" height="4" fill="#9a2a1e"/>`;
+      o += `<text x="${px(tx)}" y="${py(-60)}" text-anchor="middle" font-weight="700" fill="#1d1a15">${p}</text>`;
+    }
+    o += `<text x="${px(0)}" y="${py(PLAN.bufferZ) + 14}" text-anchor="middle" fill="#9a2a1e">${t("buffer stops","車止め")}</text>`;
+    o += `<text x="${px(-24)}" y="${H - 8}" fill="#5d5547">${t("TRAIN SHED · TRAINS LEAVE SOUTH ↓","ホームと屋根（列車は南へ出ていく）↓")}</text>`;
+    // 流れ
+    o += `<path d="M${px(-3)},${py(PLAN.entranceZ)} C${px(-3)},${py(-8)} ${px(5)},${py(-14)} ${px(5.2)},${py(PLAN.barrierZ - 6)}" fill="none" stroke="#2d6a4f" stroke-width="2" marker-end="url(#a)"/>`;
+    o += `<path d="M${px(-9)},${py(PLAN.barrierZ - 6)} C${px(-9)},${py(-14)} ${px(-6)},${py(-12)} ${px(-7)},${py(PLAN.stairs.z1 + .5)}" fill="none" stroke="#b5651d" stroke-width="2" marker-end="url(#b)"/>`;
+    o += `<defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2d6a4f"/></marker><marker id="b" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#b5651d"/></marker></defs>`;
+    o += `<g transform="translate(${px(28)},${py(40)})"><rect x="-6" y="-14" width="150" height="46" fill="#f8f3e6" stroke="#8d8370"/><line x1="0" y1="0" x2="20" y2="0" stroke="#2d6a4f" stroke-width="2"/><text x="26" y="4">${t("passengers to trains","乗る人")}</text><line x1="0" y1="18" x2="20" y2="18" stroke="#b5651d" stroke-width="2"/><text x="26" y="22">${t("arriving passengers","降りた人")}</text></g>`;
+    // 方位と縮尺
+    o += `<g transform="translate(${W - 34},${py(PLAN.entranceZ + 2) + 30})"><path d="M0,-14 L6,6 L0,2 L-6,6 Z" fill="#1d1a15"/><text y="20" text-anchor="middle" font-weight="700">N</text></g>`;
+    o += `<g transform="translate(14,${H - 22})"><line x1="0" y1="0" x2="${10*S}" y2="0" stroke="#1d1a15" stroke-width="2"/><text x="0" y="14">0</text><text x="${10*S}" y="14" text-anchor="end">10 m</text></g>`;
+    o += `</svg>`;
+    return o;
+  }
+
+  function drawBoardLight(g){
+    const {em, ww, wh, lightRGB} = g;
+    const glowCv = document.getElementById("glow");
+    const bw = 96, bh = Math.max(24, Math.round(96*wh/ww));
+    for(const cv of [shadeCv, glowCv]){ cv.width = bw; cv.height = bh; }
+    const sc = shadeCv.getContext("2d"), gc = glowCv.getContext("2d");
+    const si = sc.createImageData(bw,bh), gi = gc.createImageData(bw,bh);
+    for(let j=0;j<bh;j++) for(let i=0;i<bw;i++){
+      const x = (i+.5)/bw*ww, y = (j+.5)/bh*wh;
+      const L = lightRGB([x,y,0.3*em],[0,0,1]); const li = (L[0]+L[1]+L[2])/3;
+      const k = (j*bw+i)*4;
+      si.data[k+3] = Math.max(0, Math.min(150, (1 - Math.min(1, li*2.6))*150));   // 灯りから遠い下の方は少し暗く
+      gi.data[k]=255; gi.data[k+1]=206; gi.data[k+2]=150; gi.data[k+3] = Math.min(42, Math.pow(li,1.8)*120);
+    }
+    sc.putImageData(si,0,0); gc.putImageData(gi,0,0);
+  }
+  /* ---------- 操作：モード（Live / Demo）と速さを分けた ---------- */
+  const modeBtns = [...document.querySelectorAll("[data-mode]")];
+  const rateBtns = [...document.querySelectorAll("[data-rate]")];
+  function applyControls(){
+    speed = mode === "live" ? 1 : rate;
+    modeBtns.forEach(b => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
+    rateBtns.forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.rate === rate)));
+    document.getElementById("rateGrp").hidden = mode === "live";      // 早送りの速さは Demo の時だけ出す
+    fitPlate();
+  }
+  // プレートが折り返して高くなっても、メニューやパネルがその上に出るように高さを渡す
+  function fitPlate(){
+    const pl = document.querySelector(".plate");
+    if(pl) document.documentElement.style.setProperty("--plate-h", pl.offsetHeight + "px");
+  }
+  // 現在時刻：早送りをやめて、実際の時刻（日本時間）に戻す
+  document.getElementById("nowBtn").addEventListener("click", () => {
+    mode = "live"; now = realNow();
+    applyControls(); update(true);
+  });
+  modeBtns.forEach(b => b.addEventListener("click", () => {
+    mode = b.dataset.mode;
+    if(mode === "live") now = realNow();
+    applyControls(); update(true);
+  }));
+  rateBtns.forEach(b => b.addEventListener("click", () => {
+    if(mode === "live") return;
+    rate = +b.dataset.rate; applyControls();
+  }));
+  document.getElementById("sound").addEventListener("click", e => {
+    try{
+      if(!audio){
+        audio = new (window.AudioContext || window.webkitAudioContext)();
+        const len = Math.floor(audio.sampleRate*0.014);
+        noiseBuf = audio.createBuffer(1, len, audio.sampleRate);
+        const dd = noiseBuf.getChannelData(0);
+        for(let i=0;i<len;i++) dd[i] = (Math.random()*2-1) * Math.pow(1-i/len, 5);
+        soundInit();
+      }
+      audio.resume && audio.resume();
+      soundOn = !soundOn;
+      e.currentTarget.setAttribute("aria-pressed", String(soundOn));
+    }catch(err){}
+  });
+  document.getElementById("ttBtn").addEventListener("click", e => {
+    const open = sheet.classList.toggle("open");
+    if(open){ mixer.classList.remove("open"); document.getElementById("volBtn").setAttribute("aria-pressed", "false"); }
+    e.currentTarget.setAttribute("aria-pressed", String(open));
+    updateSheet();
+    if(open && lastNext >= 0) ttItems[lastNext].scrollIntoView({block:"center"});
+  });
+
+  let rt = null;
+  addEventListener("resize", () => { fitPlate(); clearTimeout(rt); rt = setTimeout(() => { layout(); drawRoom(); fitPlate(); }, 150); });
+  window.__setNow = v => { mode = "demo"; applyControls(); now = v; update(true); };
+  window.__check = () => { const r = document.getElementById("board").getBoundingClientRect(); const g = G; const pts = [[0,0,0],[g.ww,0,0],[g.ww,g.wh,0],[0,g.wh,0]].map(p => g.P(...p)); return {rect:[r.left,r.top,r.right,r.bottom], P:pts.map(p => [Math.round(p[0]),Math.round(p[1])])}; };
+
+  // メニュー（言語・音量・配置図・時刻表）
+  const menu = document.getElementById("menu"), menuBtn = document.getElementById("menuBtn"), plateEl = document.querySelector(".plate");
+  menuBtn.addEventListener("click", () => { const o = menu.classList.toggle("open"); menuBtn.setAttribute("aria-expanded", String(o)); plateEl.classList.toggle("active", o); });
+  const closeMenu = () => { menu.classList.remove("open"); menuBtn.setAttribute("aria-expanded", "false"); plateEl.classList.remove("active"); };
+  // 音量・配置図・時刻表のパネルは、パネルの外を押せば閉じる
+  const PANELS = [["mixer", "volBtn"], ["planSheet", "planBtn"], ["sheet", "ttBtn"]];
+  const closePanels = (except) => PANELS.forEach(([p, b]) => { if(p !== except){ document.getElementById(p).classList.remove("open"); document.getElementById(b).setAttribute("aria-pressed", "false"); } });
+  document.addEventListener("click", e => {
+    const inMenu = menu.contains(e.target) || e.target === menuBtn;
+    if(!inMenu) closeMenu();
+    const inPanel = PANELS.some(([p]) => document.getElementById(p).contains(e.target));
+    if(!inPanel && !inMenu) closePanels();
+  });
+  // メニューからパネルを開いたら、メニューは閉じる（重ならないように）
+  PANELS.forEach(([p, b]) => document.getElementById(b).addEventListener("click", () => { closePanels(p); setTimeout(closeMenu, 0); }));
+  document.addEventListener("keydown", e => { if(e.key === "Escape"){ closeMenu(); closePanels(); } });
+  // 音量の調節
+  const mixer = document.getElementById("mixer");
+  function renderMixer(){
+    const l = L10();
+    document.getElementById("volH").textContent = l.volH; document.getElementById("volP").textContent = l.volP; updateNowPlaying();
+    document.getElementById("volRows").innerHTML = SOUNDS.map(k =>
+      `<div class="vrow"><label for="vol-${k}">${l.vol[k]}</label><output id="out-${k}">${Math.round(VOL[k]*100)}</output><input id="vol-${k}" type="range" min="0" max="1.5" step="0.05" value="${VOL[k]}"></div>`).join("");
+    for(const k of SOUNDS){
+      const inp = document.getElementById("vol-" + k), out = document.getElementById("out-" + k);
+      inp.addEventListener("input", () => { setVol(k, +inp.value); out.textContent = Math.round(+inp.value*100); });
+    }
+  }
+  document.getElementById("volBtn").addEventListener("click", e => {
+    const open = mixer.classList.toggle("open");
+    e.currentTarget.setAttribute("aria-pressed", String(open));
+    if(open){ renderMixer(); sheet.classList.remove("open"); document.getElementById("ttBtn").setAttribute("aria-pressed", "false"); }
+  });
+  window.__mixer = () => { renderMixer(); mixer.classList.add("open"); };
+  // 配置図
+  const planSheet = document.getElementById("planSheet");
+  function renderPlan(){ document.getElementById("planSvg").innerHTML = planSVG(); document.getElementById("planH").textContent = L10().planH; document.getElementById("planP").textContent = L10().planP; }
+  document.getElementById("planBtn").addEventListener("click", e => {
+    const open = planSheet.classList.toggle("open");
+    e.currentTarget.setAttribute("aria-pressed", String(open));
+    if(open) renderPlan();
+  });
+  window.__plan = () => { renderPlan(); planSheet.classList.add("open"); };
+  // 言語の切り替え
+  const langBtns = [...document.querySelectorAll("[data-lang]")];
+  const showLang = () => langBtns.forEach(b => b.setAttribute("aria-pressed", String(b.dataset.lang === LANG)));
+  langBtns.forEach(b => b.addEventListener("click", () => {
+    if(LANG === b.dataset.lang) return;
+    LANG = b.dataset.lang; try{ localStorage.setItem("vic-lang", LANG); }catch(e){}
+    showLang(); buildBoard(); layout(); drawRoom(); instantNext = true; update(true); fitPlate();
+    if(planSheet.classList.contains("open")) renderPlan();
+    if(mixer.classList.contains("open")) renderMixer();
+  }));
+  const start = () => { buildBoard(); showLang(); layout(); drawRoom(); instantNext = true; update(true); fitPlate(); requestAnimationFrame(loop); };
+  (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(start);
+})();
+</script>
+</body>
+</html>
